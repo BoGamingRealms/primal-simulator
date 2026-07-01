@@ -1,0 +1,41 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D23600D4-7C7E-48D6-B636-A28EBD3EDDA7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SlotFramework", "src\SlotFramework\SlotFramework.csproj", "{B0EC0FED-869C-4B02-A7CB-6DE082446A89}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrimalGame", "src\PrimalGame\PrimalGame.csproj", "{FB070609-6665-4C6C-B09B-4EF7BE0BD169}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrimalSimulator", "src\PrimalSimulator\PrimalSimulator.csproj", "{FF3BB1D5-39EB-49D2-9912-DC67C8D804E4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B0EC0FED-869C-4B02-A7CB-6DE082446A89}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0EC0FED-869C-4B02-A7CB-6DE082446A89}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0EC0FED-869C-4B02-A7CB-6DE082446A89}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0EC0FED-869C-4B02-A7CB-6DE082446A89}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB070609-6665-4C6C-B09B-4EF7BE0BD169}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB070609-6665-4C6C-B09B-4EF7BE0BD169}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB070609-6665-4C6C-B09B-4EF7BE0BD169}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB070609-6665-4C6C-B09B-4EF7BE0BD169}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF3BB1D5-39EB-49D2-9912-DC67C8D804E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF3BB1D5-39EB-49D2-9912-DC67C8D804E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF3BB1D5-39EB-49D2-9912-DC67C8D804E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF3BB1D5-39EB-49D2-9912-DC67C8D804E4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B0EC0FED-869C-4B02-A7CB-6DE082446A89} = {D23600D4-7C7E-48D6-B636-A28EBD3EDDA7}
+		{FB070609-6665-4C6C-B09B-4EF7BE0BD169} = {D23600D4-7C7E-48D6-B636-A28EBD3EDDA7}
+		{FF3BB1D5-39EB-49D2-9912-DC67C8D804E4} = {D23600D4-7C7E-48D6-B636-A28EBD3EDDA7}
+	EndGlobalSection
+EndGlobal

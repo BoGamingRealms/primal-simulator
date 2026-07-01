@@ -1,0 +1,15 @@
+# Build artifacts
+[Bb]in/
+[Oo]bj/
+
+# IDE files
+.vscode/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
