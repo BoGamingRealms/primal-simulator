@@ -1,0 +1,11 @@
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/bin/Debug/net9.0/SlotFramework.deps.json
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/bin/Debug/net9.0/SlotFramework.dll
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/bin/Debug/net9.0/SlotFramework.pdb
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.GeneratedMSBuildEditorConfig.editorconfig
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.AssemblyInfoInputs.cache
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.AssemblyInfo.cs
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.csproj.CoreCompileInputs.cache
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.dll
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/refint/SlotFramework.dll
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.pdb
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/ref/SlotFramework.dll
