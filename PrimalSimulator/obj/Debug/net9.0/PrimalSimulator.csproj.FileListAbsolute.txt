@@ -30,3 +30,4 @@
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalSimulator/bin/Debug/net9.0/RBush.dll
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalSimulator/bin/Debug/net9.0/SixLabors.Fonts.dll
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalSimulator/bin/Debug/net9.0/System.IO.Packaging.dll
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalSimulator/obj/Debug/net9.0/PrimalSimulator.sourcelink.json

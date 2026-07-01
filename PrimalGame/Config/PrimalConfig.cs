@@ -26,6 +26,8 @@ public class PrimalConfig
     };
     public int FreeSpinsMultiplier { get; set; } = 2;
 
+    public Dictionary<string, int[]> BaseGameStageWeights { get; set; } = new();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();

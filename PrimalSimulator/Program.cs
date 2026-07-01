@@ -38,7 +38,19 @@ try
     }
     Console.WriteLine(new string('-', 75));
 
-    // 2. Generate and save simulation stats
+    // 2. Print Base Game Stages & Reelset Weights
+    Console.WriteLine("\nLoaded Base Game Stages & Reelset Weights (20 Reelsets):");
+    Console.WriteLine(new string('-', 100));
+    Console.WriteLine($"{"Stage Name",-12} | {"Weights (Reelsets 0-19)"}");
+    Console.WriteLine(new string('-', 100));
+    foreach (var kvp in config.BaseGameStageWeights)
+    {
+        string weightsStr = string.Join(",", kvp.Value);
+        Console.WriteLine($"{kvp.Key,-12} | {weightsStr}");
+    }
+    Console.WriteLine(new string('-', 100));
+
+    // 3. Generate and save simulation stats
     Console.WriteLine("\nGenerating simulation results...");
     var mockStats = new Dictionary<string, string>
     {
@@ -49,7 +61,8 @@ try
         { "Free Spins RTP", "32.67%" },
         { "Total Return to Player (RTP)", "95.12%" },
         { "Hit Frequency", "24.87%" },
-        { "Free Spins Hit Frequency", "1 in 143.5 spins" }
+        { "Free Spins Hit Frequency", "1 in 143.5 spins" },
+        { "Number of Base Game Stages", config.BaseGameStageWeights.Count.ToString() }
     };
 
     Console.WriteLine($"Writing simulation results to: {resultsPath}");

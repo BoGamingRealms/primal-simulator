@@ -72,6 +72,34 @@ public class ExcelConfigLoader
             }
         }
 
+        // Load Base Game Stage Weights from Row 18 (index 17) to Row 24 (index 23)
+        for (int r = 17; r < Math.Min(24, dataTable.Rows.Count); r++)
+        {
+            var row = dataTable.Rows[r];
+            var stageNameVal = row[0]?.ToString();
+            if (row[0] == DBNull.Value || string.IsNullOrWhiteSpace(stageNameVal)) continue;
+
+            string stageName = stageNameVal.Trim();
+            
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var weightsVal = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(weightsVal))
+                {
+                    string[] parts = weightsVal.Split(',');
+                    var weights = new List<int>();
+                    for (int i = 0; i < parts.Length; i++)
+                    {
+                        if (int.TryParse(parts[i].Trim(), out int w))
+                        {
+                            weights.Add(w);
+                        }
+                    }
+                    config.BaseGameStageWeights[stageName] = weights.ToArray();
+                }
+            }
+        }
+
         config.PrepareForSimulation();
 
         return config;

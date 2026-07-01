@@ -9,3 +9,4 @@
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/refint/SlotFramework.dll
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.pdb
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/ref/SlotFramework.dll
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/SlotFramework/obj/Debug/net9.0/SlotFramework.sourcelink.json

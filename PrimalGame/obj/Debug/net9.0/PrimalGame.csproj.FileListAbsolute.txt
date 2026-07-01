@@ -13,3 +13,4 @@
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalGame/obj/Debug/net9.0/refint/PrimalGame.dll
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalGame/obj/Debug/net9.0/PrimalGame.pdb
 /Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalGame/obj/Debug/net9.0/ref/PrimalGame.dll
+/Users/bo.wang/.gemini/antigravity-ide/scratch/primal/src/PrimalGame/obj/Debug/net9.0/PrimalGame.sourcelink.json
