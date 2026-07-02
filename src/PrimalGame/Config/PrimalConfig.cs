@@ -10,6 +10,7 @@ public class PrimalConfig
     public Paytable Paytable { get; set; } = new();
     public ReelSet BaseReels { get; set; } = new();
     public ReelSet FreeReels { get; set; } = new();
+    public Dictionary<string, ReelSet> Reelsets { get; set; } = new();
     public int[][] Paylines { get; set; } = Array.Empty<int[]>();
     
     // Core parameters
@@ -27,6 +28,8 @@ public class PrimalConfig
     public int FreeSpinsMultiplier { get; set; } = 2;
 
     public Dictionary<string, int[]> BaseGameStageWeights { get; set; } = new();
+
+    public int[] StageSpinsToNext { get; set; } = Array.Empty<int>();
 
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();

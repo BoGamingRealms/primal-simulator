@@ -38,7 +38,17 @@ try
     }
     Console.WriteLine(new string('-', 75));
 
-    // 2. Print Base Game Stages & Reelset Weights
+    // 2. Print Stage Spins To Next Stage
+    Console.WriteLine("\nLoaded Stage Advancement Thresholds (Spins required to advance to next stage):");
+    Console.WriteLine(new string('-', 100));
+    for (int i = 0; i < config.StageSpinsToNext.Length; i++)
+    {
+        string repeatMsg = (i == 6) ? " (Stage6 repeats itself)" : "";
+        Console.WriteLine($"Stage{i} -> Stage{(i == 6 ? 6 : i + 1)}: {config.StageSpinsToNext[i]} spins{repeatMsg}");
+    }
+    Console.WriteLine(new string('-', 100));
+
+    // 3. Print Base Game Stages & Reelset Weights
     Console.WriteLine("\nLoaded Base Game Stages & Reelset Weights (20 Reelsets):");
     Console.WriteLine(new string('-', 100));
     Console.WriteLine($"{"Stage Name",-12} | {"Weights (Reelsets 0-19)"}");
@@ -50,7 +60,23 @@ try
     }
     Console.WriteLine(new string('-', 100));
 
-    // 3. Generate and save simulation stats
+    // 4. Print Loaded Reelsets
+    Console.WriteLine("\nLoaded Reelsets (Reelsets 0-19):");
+    Console.WriteLine(new string('-', 100));
+    foreach (var kvp in config.Reelsets)
+    {
+        Console.WriteLine($"Reelset Name: {kvp.Key}");
+        for (int r = 0; r < 5; r++)
+        {
+            var strip = kvp.Value.Reels[r];
+            string preview = string.Join(",", strip.Take(15));
+            Console.WriteLine($"  Reel {r} (Len={strip.Length}): {preview}...");
+        }
+        Console.WriteLine();
+    }
+    Console.WriteLine(new string('-', 100));
+
+    // 5. Generate and save simulation stats
     Console.WriteLine("\nGenerating simulation results...");
     var mockStats = new Dictionary<string, string>
     {
@@ -62,7 +88,8 @@ try
         { "Total Return to Player (RTP)", "95.12%" },
         { "Hit Frequency", "24.87%" },
         { "Free Spins Hit Frequency", "1 in 143.5 spins" },
-        { "Number of Base Game Stages", config.BaseGameStageWeights.Count.ToString() }
+        { "Number of Base Game Stages", config.BaseGameStageWeights.Count.ToString() },
+        { "Total Stage Spins Sum", string.Join(", ", config.StageSpinsToNext) }
     };
 
     Console.WriteLine($"Writing simulation results to: {resultsPath}");

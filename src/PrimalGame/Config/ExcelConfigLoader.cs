@@ -72,8 +72,31 @@ public class ExcelConfigLoader
             }
         }
 
-        // Load Base Game Stage Weights from Row 18 (index 17) to Row 24 (index 23)
-        for (int r = 17; r < Math.Min(24, dataTable.Rows.Count); r++)
+        // Load Stage spins to next stage from Row 18 (index 17)
+        if (dataTable.Rows.Count > 17)
+        {
+            var row18 = dataTable.Rows[17];
+            if (row18.ItemArray.Length > 1 && row18[1] != DBNull.Value)
+            {
+                var spinsVal = row18[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(spinsVal))
+                {
+                    string[] parts = spinsVal.Split(',');
+                    var spinsList = new List<int>();
+                    foreach (var part in parts)
+                    {
+                        if (int.TryParse(part.Trim(), out int val))
+                        {
+                            spinsList.Add(val);
+                        }
+                    }
+                    config.StageSpinsToNext = spinsList.ToArray();
+                }
+            }
+        }
+
+        // Load Base Game Stage Weights from Row 19 (index 18) to Row 25 (index 24)
+        for (int r = 18; r < Math.Min(25, dataTable.Rows.Count); r++)
         {
             var row = dataTable.Rows[r];
             var stageNameVal = row[0]?.ToString();
@@ -98,6 +121,58 @@ public class ExcelConfigLoader
                     config.BaseGameStageWeights[stageName] = weights.ToArray();
                 }
             }
+        }
+
+        // Load Reelsets starting from Row 26 (index 25)
+        int startRowIndex = 25;
+        while (startRowIndex < dataTable.Rows.Count)
+        {
+            var row = dataTable.Rows[startRowIndex];
+            var reelsetNameVal = row[0]?.ToString();
+            if (string.IsNullOrWhiteSpace(reelsetNameVal))
+            {
+                break;
+            }
+
+            string reelsetName = reelsetNameVal.Trim();
+            int[][] reels = new int[5][];
+            bool hasValidData = true;
+
+            for (int r = 0; r < 5; r++)
+            {
+                int currRowIndex = startRowIndex + r;
+                if (currRowIndex >= dataTable.Rows.Count)
+                {
+                    hasValidData = false;
+                    break;
+                }
+
+                var rRow = dataTable.Rows[currRowIndex];
+                var cellB = rRow[1]?.ToString();
+                if (string.IsNullOrWhiteSpace(cellB))
+                {
+                    hasValidData = false;
+                    break;
+                }
+
+                string[] parts = cellB.Split(',');
+                var strip = new List<int>();
+                foreach (var part in parts)
+                {
+                    if (int.TryParse(part.Trim(), out int symId))
+                    {
+                        strip.Add(symId);
+                    }
+                }
+                reels[r] = strip.ToArray();
+            }
+
+            if (hasValidData)
+            {
+                config.Reelsets[reelsetName] = new ReelSet(reels);
+            }
+
+            startRowIndex += 5;
         }
 
         config.PrepareForSimulation();
