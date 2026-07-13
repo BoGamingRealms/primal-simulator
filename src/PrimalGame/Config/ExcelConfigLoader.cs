@@ -58,12 +58,14 @@ public class ExcelConfigLoader
                 {
                     string payStr = payValue.Trim();
                     string[] parts = payStr.Split(',');
-                    // normal symbols have payouts for 3, 4, 5 of a kind (index 0 maps to 3, 1 to 4, 2 to 5)
+                    // Normal symbols have payouts for 3, 4, 5 of a kind (starting at 3).
+                    // Symbols with 4 values (such as H1) start at 2 (payouts for 2, 3, 4, 5 of a kind).
+                    int startMatch = (parts.Length == 4) ? 2 : 3;
                     for (int i = 0; i < parts.Length; i++)
                     {
                         if (double.TryParse(parts[i].Trim(), out double multiplier))
                         {
-                            int matchCount = 3 + i;
+                            int matchCount = startMatch + i;
                             long payoutInCents = (long)Math.Round(multiplier * 100);
                             config.Paytable.AddPayout(symbolId, matchCount, payoutInCents);
                         }
@@ -174,6 +176,31 @@ public class ExcelConfigLoader
 
             startRowIndex += 5;
         }
+
+        // Temporary 20 paylines for testing (3x5 grid)
+        config.Paylines = new int[][]
+        {
+            new int[] { 1, 1, 1, 1, 1 }, // Line 1 (middle row)
+            new int[] { 0, 0, 0, 0, 0 }, // Line 2 (top row)
+            new int[] { 2, 2, 2, 2, 2 }, // Line 3 (bottom row)
+            new int[] { 0, 1, 2, 1, 0 }, // Line 4 (V-shape)
+            new int[] { 2, 1, 0, 1, 2 }, // Line 5 (inverted V-shape)
+            new int[] { 0, 0, 1, 2, 2 }, // Line 6
+            new int[] { 2, 2, 1, 0, 0 }, // Line 7
+            new int[] { 1, 0, 0, 0, 1 }, // Line 8
+            new int[] { 1, 2, 2, 2, 1 }, // Line 9
+            new int[] { 1, 0, 1, 2, 1 }, // Line 10
+            new int[] { 1, 2, 1, 0, 1 }, // Line 11
+            new int[] { 0, 1, 1, 1, 0 }, // Line 12
+            new int[] { 2, 1, 1, 1, 2 }, // Line 13
+            new int[] { 0, 1, 0, 1, 0 }, // Line 14
+            new int[] { 2, 1, 2, 1, 2 }, // Line 15
+            new int[] { 1, 1, 0, 1, 1 }, // Line 16
+            new int[] { 1, 1, 2, 1, 1 }, // Line 17
+            new int[] { 0, 0, 2, 0, 0 }, // Line 18
+            new int[] { 2, 2, 0, 2, 2 }, // Line 19
+            new int[] { 0, 2, 0, 2, 0 }  // Line 20
+        };
 
         config.PrepareForSimulation();
 
