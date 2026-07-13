@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Data;
 using System.Collections.Generic;
+using System.Linq;
 using ExcelDataReader;
 using ClosedXML.Excel;
 using SlotFramework.Models;
@@ -74,13 +75,13 @@ public class ExcelConfigLoader
             }
         }
 
-        // Load Stage spins to next stage from Row 18 (index 17)
-        if (dataTable.Rows.Count > 17)
+        // Load Stage spins to next stage from Row 39 (index 38)
+        if (dataTable.Rows.Count > 38)
         {
-            var row18 = dataTable.Rows[17];
-            if (row18.ItemArray.Length > 1 && row18[1] != DBNull.Value)
+            var row39 = dataTable.Rows[38];
+            if (row39.ItemArray.Length > 1 && row39[1] != DBNull.Value)
             {
-                var spinsVal = row18[1]?.ToString();
+                var spinsVal = row39[1]?.ToString();
                 if (!string.IsNullOrWhiteSpace(spinsVal))
                 {
                     string[] parts = spinsVal.Split(',');
@@ -97,8 +98,8 @@ public class ExcelConfigLoader
             }
         }
 
-        // Load Base Game Stage Weights from Row 19 (index 18) to Row 25 (index 24)
-        for (int r = 18; r < Math.Min(25, dataTable.Rows.Count); r++)
+        // Load Base Game Stage Weights from Row 40 (index 39) to Row 46 (index 45)
+        for (int r = 39; r < Math.Min(46, dataTable.Rows.Count); r++)
         {
             var row = dataTable.Rows[r];
             var stageNameVal = row[0]?.ToString();
@@ -125,8 +126,8 @@ public class ExcelConfigLoader
             }
         }
 
-        // Load Reelsets starting from Row 26 (index 25)
-        int startRowIndex = 25;
+        // Load Reelsets starting from Row 47 (index 46)
+        int startRowIndex = 46;
         while (startRowIndex < dataTable.Rows.Count)
         {
             var row = dataTable.Rows[startRowIndex];
@@ -177,30 +178,138 @@ public class ExcelConfigLoader
             startRowIndex += 5;
         }
 
-        // Temporary 20 paylines for testing (3x5 grid)
-        config.Paylines = new int[][]
+        // Load Paylines from Row 18 (index 17) to Row 37 (index 36)
+        var paylinesList = new List<int[]>();
+        for (int r = 17; r < 37; r++)
         {
-            new int[] { 1, 1, 1, 1, 1 }, // Line 1 (middle row)
-            new int[] { 0, 0, 0, 0, 0 }, // Line 2 (top row)
-            new int[] { 2, 2, 2, 2, 2 }, // Line 3 (bottom row)
-            new int[] { 0, 1, 2, 1, 0 }, // Line 4 (V-shape)
-            new int[] { 2, 1, 0, 1, 2 }, // Line 5 (inverted V-shape)
-            new int[] { 0, 0, 1, 2, 2 }, // Line 6
-            new int[] { 2, 2, 1, 0, 0 }, // Line 7
-            new int[] { 1, 0, 0, 0, 1 }, // Line 8
-            new int[] { 1, 2, 2, 2, 1 }, // Line 9
-            new int[] { 1, 0, 1, 2, 1 }, // Line 10
-            new int[] { 1, 2, 1, 0, 1 }, // Line 11
-            new int[] { 0, 1, 1, 1, 0 }, // Line 12
-            new int[] { 2, 1, 1, 1, 2 }, // Line 13
-            new int[] { 0, 1, 0, 1, 0 }, // Line 14
-            new int[] { 2, 1, 2, 1, 2 }, // Line 15
-            new int[] { 1, 1, 0, 1, 1 }, // Line 16
-            new int[] { 1, 1, 2, 1, 1 }, // Line 17
-            new int[] { 0, 0, 2, 0, 0 }, // Line 18
-            new int[] { 2, 2, 0, 2, 2 }, // Line 19
-            new int[] { 0, 2, 0, 2, 0 }  // Line 20
-        };
+            if (r < dataTable.Rows.Count)
+            {
+                var row = dataTable.Rows[r];
+                if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+                {
+                    var lineConfigStr = row[1]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(lineConfigStr))
+                    {
+                        string[] parts = lineConfigStr.Split(',');
+                        var lineCoordinates = new List<int>();
+                        foreach (var part in parts)
+                        {
+                            if (int.TryParse(part.Trim(), out int val))
+                            {
+                                lineCoordinates.Add(val);
+                            }
+                        }
+                        if (lineCoordinates.Count == 5)
+                        {
+                            paylinesList.Add(lineCoordinates.ToArray());
+                        }
+                    }
+                }
+            }
+        }
+        config.Paylines = paylinesList.ToArray();
+
+        // Load Jackpot Bonus Trigger values from Row 147 (index 146)
+        if (dataTable.Rows.Count > 146)
+        {
+            var row147 = dataTable.Rows[146];
+            if (row147.ItemArray.Length > 1 && row147[1] != DBNull.Value)
+            {
+                var valuesStr = row147[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(valuesStr))
+                {
+                    string[] parts = valuesStr.Split(',');
+                    var valuesList = new List<double>();
+                    foreach (var part in parts)
+                    {
+                        if (double.TryParse(part.Trim(), out double val))
+                        {
+                            valuesList.Add(val);
+                        }
+                    }
+                    config.JackpotTriggerCashValues = valuesList.ToArray();
+                }
+            }
+        }
+
+        // Load Jackpot Bonus Trigger weights from Row 148 (index 147)
+        if (dataTable.Rows.Count > 147)
+        {
+            var row148 = dataTable.Rows[147];
+            if (row148.ItemArray.Length > 1 && row148[1] != DBNull.Value)
+            {
+                var weightsStr = row148[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(weightsStr))
+                {
+                    string[] parts = weightsStr.Split(',');
+                    var weightsList = new List<int>();
+                    foreach (var part in parts)
+                    {
+                        if (int.TryParse(part.Trim(), out int val))
+                        {
+                            weightsList.Add(val);
+                        }
+                    }
+                    config.JackpotTriggerCashWeights = weightsList.ToArray();
+                }
+            }
+        }
+
+        // Load Jackpot Bonus Trigger triggering chance weight from Row 149 (index 148)
+        if (dataTable.Rows.Count > 148)
+        {
+            var row149 = dataTable.Rows[148];
+            if (row149.ItemArray.Length > 1 && row149[1] != DBNull.Value)
+            {
+                var weightStr = row149[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(weightStr) && int.TryParse(weightStr.Trim(), out int val))
+                {
+                    config.JackpotBonusTriggerChanceWeight = val;
+                }
+            }
+        }
+
+        // Load Jackpot Names from Row 150 (index 149)
+        if (dataTable.Rows.Count > 149)
+        {
+            var row150 = dataTable.Rows[149];
+            if (row150.ItemArray.Length > 1 && row150[1] != DBNull.Value)
+            {
+                var namesStr = row150[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(namesStr))
+                {
+                    config.JackpotNames = namesStr.Split(',').Select(s => s.Trim()).ToArray();
+                }
+            }
+        }
+
+        // Load Jackpot Values from Row 151 (index 150)
+        if (dataTable.Rows.Count > 150)
+        {
+            var row151 = dataTable.Rows[150];
+            if (row151.ItemArray.Length > 1 && row151[1] != DBNull.Value)
+            {
+                var valuesStr = row151[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(valuesStr))
+                {
+                    config.JackpotValues = valuesStr.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Jackpot Weights from Row 152 (index 151)
+        if (dataTable.Rows.Count > 151)
+        {
+            var row152 = dataTable.Rows[151];
+            if (row152.ItemArray.Length > 1 && row152[1] != DBNull.Value)
+            {
+                var weightsStr = row152[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(weightsStr))
+                {
+                    config.JackpotWeights = weightsStr.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
 
         config.PrepareForSimulation();
 

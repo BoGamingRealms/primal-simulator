@@ -31,6 +31,18 @@ public class PrimalConfig
 
     public int[] StageSpinsToNext { get; set; } = Array.Empty<int>();
 
+    // Jackpot trigger cash value feature configuration
+    public double[] JackpotTriggerCashValues { get; set; } = Array.Empty<double>();
+    public int[] JackpotTriggerCashWeights { get; set; } = Array.Empty<int>();
+    public int JackpotTriggerSymbolId { get; set; } = 14;
+    public int CollectorSymbolId { get; set; } = 9;
+
+    // Jackpot Bonus configuration
+    public int JackpotBonusTriggerChanceWeight { get; set; } = 2000;
+    public string[] JackpotNames { get; set; } = Array.Empty<string>();
+    public double[] JackpotValues { get; set; } = Array.Empty<double>();
+    public int[] JackpotWeights { get; set; } = Array.Empty<int>();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();
