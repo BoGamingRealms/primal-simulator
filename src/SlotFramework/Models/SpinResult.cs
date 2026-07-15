@@ -33,4 +33,15 @@ public class SpinResult
     public string WonJackpotName { get; set; } = "";
     public double WonJackpotValue { get; set; } = 0.0;
     public long JackpotBonusWin { get; set; } = 0;
+
+    // Pot Bonus details
+    public List<TriggeredPotBonus> TriggeredPotBonuses { get; set; } = new();
+    public int[] PotPowersBefore { get; set; } = System.Array.Empty<int>();
+    public int[] PotPowersAfter { get; set; } = System.Array.Empty<int>();
+}
+
+public class TriggeredPotBonus
+{
+    public int PotIndex { get; set; } // 0 = Bonus 1, 1 = Bonus 2, 2 = Bonus 3, 3 = Bonus 4
+    public int Power { get; set; }    // Power level of the bonus when triggered (current + N - 1)
 }

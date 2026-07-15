@@ -13,6 +13,9 @@ namespace PrimalGame
         private string _currentStage = "Stage0";
         private int _spinsInCurrentStage = 0;
         private int _stageIndex = 0;
+        private readonly int[] _potPowers = new int[4] { 0, 0, 0, 0 };
+
+        public int[] PotPowers => _potPowers;
 
         public PrimalSlotEngine(PrimalConfig config)
         {
@@ -47,6 +50,12 @@ namespace PrimalGame
                     powerUpTriggered = true;
                 }
                 _spinsInCurrentStage = 1; // reset counter for new stage
+            }
+
+            if (powerUpTriggered)
+            {
+                int p = rng.Next(4);
+                _potPowers[p] = _config.MaxBonusPower;
             }
 
             // 2. Select Reelset based on Stage Weights
@@ -90,6 +99,9 @@ namespace PrimalGame
 
             // 5. Evaluate Jackpot Trigger Collections
             EvaluateCollections(spinResult, rng);
+
+            // 6. Evaluate Pot triggers & progress
+            EvaluatePots(spinResult, rng);
 
             return spinResult;
         }
@@ -209,13 +221,13 @@ namespace PrimalGame
 
             int totalCollectors = collectorsReel0 + collectorsReel4;
 
-            // 2. Count Jackpot Triggers on the screen
+            // 2. Count Fire Core symbols on the screen
             int triggerCount = 0;
             for (int r = 0; r < 5; r++)
             {
                 for (int row = 0; row < 3; row++)
                 {
-                    if (spinResult.ScreenSymbols[r][row] == _config.JackpotTriggerSymbolId)
+                    if (spinResult.ScreenSymbols[r][row] == _config.FireCoreSymbolId)
                     {
                         triggerCount++;
                     }
@@ -228,10 +240,10 @@ namespace PrimalGame
                 double sumMultipliers = 0.0;
                 for (int i = 0; i < triggerCount; i++)
                 {
-                    if (_config.JackpotTriggerCashValues.Length > 0 && _config.JackpotTriggerCashWeights.Length > 0)
+                    if (_config.FireCoreCashValues.Length > 0 && _config.FireCoreCashWeights.Length > 0)
                     {
-                        int chosenValIndex = ChooseWeightedIndex(_config.JackpotTriggerCashWeights, rng);
-                        sumMultipliers += _config.JackpotTriggerCashValues[chosenValIndex];
+                        int chosenValIndex = ChooseWeightedIndex(_config.FireCoreCashWeights, rng);
+                        sumMultipliers += _config.FireCoreCashValues[chosenValIndex];
                     }
                 }
 
@@ -292,6 +304,51 @@ namespace PrimalGame
                 if (r < sum) return i;
             }
             return 0;
+        }
+
+        private void EvaluatePots(SpinResult spinResult, IRng rng)
+        {
+            spinResult.PotPowersBefore = _potPowers.ToArray();
+
+            for (int p = 0; p < 4; p++)
+            {
+                int symbolId = 10 + p;
+                int count = 0;
+                for (int r = 0; r < 5; r++)
+                {
+                    for (int row = 0; row < 3; row++)
+                    {
+                        if (spinResult.ScreenSymbols[r][row] == symbolId)
+                        {
+                            count++;
+                        }
+                    }
+                }
+
+                if (count > 0)
+                {
+                    int chanceWeight = _config.PotTriggerChanceWeights[p];
+                    if (rng.Next(chanceWeight) < count)
+                    {
+                        // Triggered!
+                        int triggeredPower = _potPowers[p] + (count - 1);
+                        spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
+                        {
+                            PotIndex = p,
+                            Power = triggeredPower
+                        });
+                        
+                        _potPowers[p] = 0; // reset
+                    }
+                    else
+                    {
+                        // Not triggered, increase power
+                        _potPowers[p] += count;
+                    }
+                }
+            }
+
+            spinResult.PotPowersAfter = _potPowers.ToArray();
         }
     }
 }

@@ -128,7 +128,7 @@ public class ExcelConfigLoader
 
         // Load Reelsets starting from Row 47 (index 46)
         int startRowIndex = 46;
-        while (startRowIndex < dataTable.Rows.Count)
+        while (startRowIndex < 46 + 100 && startRowIndex < dataTable.Rows.Count)
         {
             var row = dataTable.Rows[startRowIndex];
             var reelsetNameVal = row[0]?.ToString();
@@ -209,7 +209,7 @@ public class ExcelConfigLoader
         }
         config.Paylines = paylinesList.ToArray();
 
-        // Load Jackpot Bonus Trigger values from Row 147 (index 146)
+        // Load Fire Core values from Row 147 (index 146)
         if (dataTable.Rows.Count > 146)
         {
             var row147 = dataTable.Rows[146];
@@ -227,12 +227,12 @@ public class ExcelConfigLoader
                             valuesList.Add(val);
                         }
                     }
-                    config.JackpotTriggerCashValues = valuesList.ToArray();
+                    config.FireCoreCashValues = valuesList.ToArray();
                 }
             }
         }
 
-        // Load Jackpot Bonus Trigger weights from Row 148 (index 147)
+        // Load Fire Core weights from Row 148 (index 147)
         if (dataTable.Rows.Count > 147)
         {
             var row148 = dataTable.Rows[147];
@@ -250,12 +250,12 @@ public class ExcelConfigLoader
                             weightsList.Add(val);
                         }
                     }
-                    config.JackpotTriggerCashWeights = weightsList.ToArray();
+                    config.FireCoreCashWeights = weightsList.ToArray();
                 }
             }
         }
 
-        // Load Jackpot Bonus Trigger triggering chance weight from Row 149 (index 148)
+        // Load Jackpot Bonus triggering chance weight from Row 149 (index 148)
         if (dataTable.Rows.Count > 148)
         {
             var row149 = dataTable.Rows[148];

@@ -31,10 +31,10 @@ public class PrimalConfig
 
     public int[] StageSpinsToNext { get; set; } = Array.Empty<int>();
 
-    // Jackpot trigger cash value feature configuration
-    public double[] JackpotTriggerCashValues { get; set; } = Array.Empty<double>();
-    public int[] JackpotTriggerCashWeights { get; set; } = Array.Empty<int>();
-    public int JackpotTriggerSymbolId { get; set; } = 14;
+    // Fire Core cash value feature configuration
+    public double[] FireCoreCashValues { get; set; } = Array.Empty<double>();
+    public int[] FireCoreCashWeights { get; set; } = Array.Empty<int>();
+    public int FireCoreSymbolId { get; set; } = 14;
     public int CollectorSymbolId { get; set; } = 9;
 
     // Jackpot Bonus configuration
@@ -42,6 +42,10 @@ public class PrimalConfig
     public string[] JackpotNames { get; set; } = Array.Empty<string>();
     public double[] JackpotValues { get; set; } = Array.Empty<double>();
     public int[] JackpotWeights { get; set; } = Array.Empty<int>();
+
+    // Pot Bonus configuration
+    public int[] PotTriggerChanceWeights { get; set; } = new int[] { 1000, 1000, 1000, 1000 };
+    public int MaxBonusPower { get; set; } = 100;
 
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
