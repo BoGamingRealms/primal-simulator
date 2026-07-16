@@ -468,7 +468,14 @@ try
 
         // Console Prints following the exact structured hierarchy:
         Console.WriteLine($"Simulation complete!");
-        Console.WriteLine($"  - Total RTP: {totalRtp:P2} (Line RTP: {lineWinRtp:P2}, Collect Feature RTP: {collectFeatureRtp:P2}, Jackpot Bonus RTP: {jackpotBonusRtp:P2}, Lock & Slingo RTP: {lockSlingoRtp:P2})");
+        Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
+        Console.WriteLine($"    - Line Payout RTP: {lineWinRtp:P2}");
+        Console.WriteLine($"    - Collect Feature RTP: {collectFeatureRtp:P2}");
+        Console.WriteLine($"    - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
+        Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
+        Console.WriteLine($"    - Bonus 2 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Bonus 3 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
         
         Console.WriteLine("\n=========================================================================================");
@@ -558,7 +565,14 @@ try
     else
     {
         Console.WriteLine($"Simulation complete!");
-        Console.WriteLine($"  - Total RTP: {totalRtp:P2} (Line RTP: {lineWinRtp:P2}, Collect Feature RTP: {collectFeatureRtp:P2}, Jackpot Bonus RTP: {jackpotBonusRtp:P2}, Lock & Slingo RTP: {lockSlingoRtp:P2})");
+        Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
+        Console.WriteLine($"    - Line Payout RTP: {lineWinRtp:P2}");
+        Console.WriteLine($"    - Collect Feature RTP: {collectFeatureRtp:P2}");
+        Console.WriteLine($"    - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
+        Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
+        Console.WriteLine($"    - Bonus 2 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Bonus 3 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
         
         Console.WriteLine("\n=========================================================================================");
