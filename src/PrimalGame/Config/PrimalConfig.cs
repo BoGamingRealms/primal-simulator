@@ -47,6 +47,16 @@ public class PrimalConfig
     public int[] PotTriggerChanceWeights { get; set; } = new int[] { 1000, 1000, 1000, 1000 };
     public int MaxBonusPower { get; set; } = 100;
 
+    // Lock & Slingo (Bonus 1) configuration
+    public int[] LockSlingoSpins { get; set; } = Array.Empty<int>();
+    public int[] LockSlingoTriggerWeights { get; set; } = Array.Empty<int>();
+    public double[] LockSlingoBonusMinimums { get; set; } = Array.Empty<double>();
+    public int[] LockSlingoLadderLines { get; set; } = Array.Empty<int>();
+    public double[] LockSlingoLadderPrizes { get; set; } = Array.Empty<double>();
+    public double[] LockSlingoFireCoreValues { get; set; } = Array.Empty<double>();
+    public int[] LockSlingoFireCoreWeights { get; set; } = Array.Empty<int>();
+    public List<PotLandingWeight> LockSlingoLandingChanceWeights { get; set; } = new();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();
@@ -80,4 +90,10 @@ public class PrimalConfig
             }
         }
     }
+}
+
+public class PotLandingWeight
+{
+    public int Threshold { get; set; } // Empty space count threshold
+    public int[] Weights { get; set; } = Array.Empty<int>(); // Weights for landing 3, 2, 1 Fire Cores or Blank
 }

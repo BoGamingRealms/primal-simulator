@@ -311,6 +311,129 @@ public class ExcelConfigLoader
             }
         }
 
+        // Load Lock & Slingo Spins from Row 153 (index 152)
+        if (dataTable.Rows.Count > 152)
+        {
+            var row = dataTable.Rows[152];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoSpins = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo Trigger Weights from Row 154 (index 153)
+        if (dataTable.Rows.Count > 153)
+        {
+            var row = dataTable.Rows[153];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoTriggerWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo Bonus Minimums from Row 155 (index 154)
+        if (dataTable.Rows.Count > 154)
+        {
+            var row = dataTable.Rows[154];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoBonusMinimums = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo Ladder Lines from Row 156 (index 155)
+        if (dataTable.Rows.Count > 155)
+        {
+            var row = dataTable.Rows[155];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoLadderLines = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo Ladder Prizes from Row 157 (index 156)
+        if (dataTable.Rows.Count > 156)
+        {
+            var row = dataTable.Rows[156];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoLadderPrizes = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo Fire Core values from Row 158 (index 157)
+        if (dataTable.Rows.Count > 157)
+        {
+            var row = dataTable.Rows[157];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoFireCoreValues = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo Fire Core weights from Row 159 (index 158)
+        if (dataTable.Rows.Count > 158)
+        {
+            var row = dataTable.Rows[158];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.LockSlingoFireCoreWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Lock & Slingo landing chance weights from Rows 161 to 165 (indices 160-164)
+        config.LockSlingoLandingChanceWeights = new List<PotLandingWeight>();
+        for (int r = 160; r <= 164; r++)
+        {
+            if (dataTable.Rows.Count > r)
+            {
+                var row = dataTable.Rows[r];
+                if (row.ItemArray.Length > 1 && row[0] != DBNull.Value && row[1] != DBNull.Value)
+                {
+                    var colA = row[0]?.ToString();
+                    var colB = row[1]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(colA) && !string.IsNullOrWhiteSpace(colB))
+                    {
+                        int threshold = int.Parse(colA.Replace(">", "").Trim());
+                        int[] weights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                        config.LockSlingoLandingChanceWeights.Add(new PotLandingWeight
+                        {
+                            Threshold = threshold,
+                            Weights = weights
+                        });
+                    }
+                }
+            }
+        }
+
         config.PrepareForSimulation();
 
         return config;

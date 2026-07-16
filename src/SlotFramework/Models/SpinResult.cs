@@ -42,6 +42,11 @@ public class SpinResult
 
 public class TriggeredPotBonus
 {
-    public int PotIndex { get; set; } // 0 = Bonus 1, 1 = Bonus 2, 2 = Bonus 3, 3 = Bonus 4
-    public int Power { get; set; }    // Power level of the bonus when triggered (current + N - 1)
+    public int PotIndex { get; set; }      // 0 = Bonus 1, 1 = Bonus 2, 2 = Bonus 3, 3 = Bonus 4
+    public int Power { get; set; }         // Power level of the bonus when triggered (current + N - 1)
+    public long Win { get; set; }          // Total win from this bonus trigger in cents
+    public int CompletedSlingos { get; set; }
+    public double CashValuesSum { get; set; }
+    public double LadderPrize { get; set; }
+    public bool MinWinApplied { get; set; }
 }

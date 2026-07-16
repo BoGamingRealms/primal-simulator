@@ -9,10 +9,8 @@ using PrimalGame;
 using SlotFramework.Utilities;
 using SlotFramework.Models;
 
-string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-string downloadsFolder = Path.Combine(userProfile, "Downloads");
-string defaultPath = Path.Combine(downloadsFolder, "FirePrimalsElephant95.xlsx");
-string resultsPath = Path.Combine(downloadsFolder, "FirePrimalsElephant95_Results.xlsx");
+string defaultPath = "FirePrimalsElephant95.xlsx";
+string resultsPath = "FirePrimalsElephant95_Results.xlsx";
 
 bool trackFullStats = true;
 string filePath = defaultPath;
@@ -137,6 +135,28 @@ try
     int[] totalPotTriggers = new int[4];
     long[] totalPotTriggerPowers = new long[4];
     
+    // Detailed stats for Lock & Slingo (Bonus 1)
+    int totalLockSlingoTriggers = 0;
+    long totalLockSlingoWin = 0;
+    long totalLockSlingoSlingosCompleted = 0;
+    double totalLockSlingoCashSum = 0;
+    double totalLockSlingoLadderSum = 0;
+    int totalLockSlingoMinWinApplied = 0;
+    long totalLockSlingoSpinsAwarded = 0;
+    int[] lockSlingoTriggersByPower = new int[config.LockSlingoSpins.Length];
+    
+    // Detailed collect feature stats
+    int collectTriggersWith1Collector = 0;
+    int collectTriggersWith2Collectors = 0;
+    double totalCollectCashMultiplierSum = 0.0;
+    long totalCollectFireCoresCount = 0;
+    int spinsWithCollectorButNoFireCore = 0;
+    int spinsWithFireCoreButNoCollector = 0;
+
+    // Detailed jackpot bonus stats
+    int[] jackpotTriggersByFireCoreCount = new int[16];
+    long totalFireCoresOnJackpotTrigger = 0;
+
     var jackpotHits = new Dictionary<string, int>();
     var jackpotWins = new Dictionary<string, long>();
     foreach (var jpName in config.JackpotNames)
@@ -164,50 +184,63 @@ try
 
         if (trackFullStats)
         {
-            // Check if Collector landed on Reel 0 or Reel 4
-            bool hasCollector = false;
-            for (int row = 0; row < 3; row++)
-            {
-                if (spinResult.ScreenSymbols[0][row] == config.CollectorSymbolId ||
-                    spinResult.ScreenSymbols[4][row] == config.CollectorSymbolId)
-                {
-                    hasCollector = true;
-                    break;
-                }
-            }
-            if (hasCollector)
-            {
-                spinsWithCollectorOnReel0Or4++;
-            }
-
-            // Check if Fire Core landed anywhere
-            bool hasFireCore = false;
+            // Scan screen for stats
+            int fireCoreCount = 0;
             for (int r = 0; r < 5; r++)
             {
                 for (int row = 0; row < 3; row++)
                 {
                     if (spinResult.ScreenSymbols[r][row] == config.FireCoreSymbolId)
                     {
-                        hasFireCore = true;
-                        break;
+                        fireCoreCount++;
                     }
                 }
-                if (hasFireCore) break;
             }
-            if (hasFireCore)
+
+            int collectorCount = 0;
+            for (int row = 0; row < 3; row++)
+            {
+                if (spinResult.ScreenSymbols[0][row] == config.CollectorSymbolId) collectorCount++;
+                if (spinResult.ScreenSymbols[4][row] == config.CollectorSymbolId) collectorCount++;
+            }
+
+            if (collectorCount > 0)
+            {
+                spinsWithCollectorOnReel0Or4++;
+            }
+            if (fireCoreCount > 0)
             {
                 spinsWithFireCore++;
+            }
+
+            if (collectorCount > 0 && fireCoreCount == 0)
+            {
+                spinsWithCollectorButNoFireCore++;
+            }
+            if (fireCoreCount > 0 && collectorCount == 0)
+            {
+                spinsWithFireCoreButNoCollector++;
             }
 
             if (spinResult.CollectorTriggered)
             {
                 collectionTriggerSpins++;
+                if (spinResult.CollectorCount == 1) collectTriggersWith1Collector++;
+                else if (spinResult.CollectorCount == 2) collectTriggersWith2Collectors++;
+
+                totalCollectCashMultiplierSum += spinResult.TotalCollectedMultiplier;
+                totalCollectFireCoresCount += fireCoreCount;
             }
 
             if (spinResult.JackpotBonusTriggered)
             {
                 totalJackpotBonusTriggers++;
                 totalJackpotBonusWin += spinResult.JackpotBonusWin;
+                totalFireCoresOnJackpotTrigger += fireCoreCount;
+                if (fireCoreCount >= 0 && fireCoreCount < jackpotTriggersByFireCoreCount.Length)
+                {
+                    jackpotTriggersByFireCoreCount[fireCoreCount]++;
+                }
                 if (jackpotHits.ContainsKey(spinResult.WonJackpotName))
                 {
                     jackpotHits[spinResult.WonJackpotName]++;
@@ -243,6 +276,24 @@ try
                 int p = potBonus.PotIndex;
                 totalPotTriggers[p]++;
                 totalPotTriggerPowers[p] += potBonus.Power;
+                
+                if (p == 0)
+                {
+                    totalLockSlingoTriggers++;
+                    totalLockSlingoWin += potBonus.Win;
+                    totalLockSlingoSlingosCompleted += potBonus.CompletedSlingos;
+                    totalLockSlingoCashSum += potBonus.CashValuesSum;
+                    totalLockSlingoLadderSum += potBonus.LadderPrize;
+                    totalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
+                    if (potBonus.MinWinApplied)
+                    {
+                        totalLockSlingoMinWinApplied++;
+                    }
+                    if (potBonus.Power >= 0 && potBonus.Power < lockSlingoTriggersByPower.Length)
+                    {
+                        lockSlingoTriggersByPower[potBonus.Power]++;
+                    }
+                }
             }
         }
         else
@@ -251,24 +302,52 @@ try
             {
                 totalJackpotBonusWin += spinResult.JackpotBonusWin;
             }
+            
+            // In basic mode, only sum Lock & Slingo wins for proper RTP mapping and power spins count
+            foreach (var potBonus in spinResult.TriggeredPotBonuses)
+            {
+                if (potBonus.PotIndex == 0)
+                {
+                    totalLockSlingoTriggers++;
+                    totalLockSlingoWin += potBonus.Win;
+                    totalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
+                }
+            }
         }
     }
     
     double totalRtp = (double)totalWin / (totalSpins * 100.0);
     double lineWinRtp = (double)totalLineWin / (totalSpins * 100.0);
-    double totalFeatureRtp = (double)totalFeatureWin / (totalSpins * 100.0);
     double hitFreq = (double)winSpins / totalSpins;
     
-    var stats = new Dictionary<string, string>
-    {
-        { "Simulation Date", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
-        { "Game Name", "4 Fire Primals" },
-        { "Simulation Mode", modeName },
-        { "Total Spins Run", totalSpins.ToString("N0") },
-        { "Line Payout RTP", $"{lineWinRtp:P2}" },
-        { "Total Return to Player (RTP)", $"{totalRtp:P2}" },
-        { "Hit Frequency", $"{hitFreq:P2}" }
-    };
+    double lockSlingoRtp = (double)totalLockSlingoWin / (totalSpins * 100.0);
+    double lockSlingoTriggerChance = (double)totalLockSlingoTriggers / totalSpins;
+    string lockSlingoTriggerFreqStr = lockSlingoTriggerChance > 0 ? $"1 in {1.0 / lockSlingoTriggerChance:F1} spins ({lockSlingoTriggerChance:P4})" : "Never";
+    double avgLockSlingoWinMultiplier = totalLockSlingoTriggers > 0 ? (double)totalLockSlingoWin / (totalLockSlingoTriggers * 100.0) : 0.0;
+    double avgStartingSpins = totalLockSlingoTriggers > 0 ? (double)totalLockSlingoSpinsAwarded / totalLockSlingoTriggers : 0.0;
+
+    double jackpotBonusRtp = (double)totalJackpotBonusWin / (totalSpins * 100.0);
+    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin) / (totalSpins * 100.0);
+    
+    // Construct order-preserving stats dictionary following the requested sections
+    var stats = new Dictionary<string, string>();
+
+    // SECTION 1: Overall top-level game stats
+    stats["Simulation Date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+    stats["Game Name"] = "4 Fire Primals";
+    stats["Simulation Mode"] = modeName;
+    stats["Total Spins Run"] = totalSpins.ToString("N0");
+    stats["Total Return to Player (RTP)"] = $"{totalRtp:P2}";
+    stats["Line Payout RTP"] = $"{lineWinRtp:P2}";
+    stats["Collector Feature RTP"] = $"{collectFeatureRtp:P2}";
+    stats["Jackpot Bonus RTP"] = $"{jackpotBonusRtp:P2}";
+    stats["Lock & Slingo (Bonus 1) RTP"] = $"{lockSlingoRtp:P2}";
+    stats["Bonus 2 RTP"] = "0.00%";
+    stats["Bonus 3 RTP"] = "0.00%";
+    stats["Bonus 4 RTP"] = "0.00%";
+    stats["Hit Frequency"] = $"{hitFreq:P2}";
+    stats["Stage 6 Power Max Triggers"] = totalPowerUpTriggers.ToString("N0");
+    stats["Number of Base Game Stages"] = config.BaseGameStageWeights.Count.ToString();
 
     if (trackFullStats)
     {
@@ -280,98 +359,232 @@ try
         string fireCoreLandingFreqStr = fireCoreLandingChance > 0 ? $"1 in {1.0 / fireCoreLandingChance:F1} spins ({fireCoreLandingChance:P2})" : "Never";
         string collectionTriggerFreqStr = collectionTriggerChance > 0 ? $"1 in {1.0 / collectionTriggerChance:F1} spins ({collectionTriggerChance:P2})" : "Never";
 
-        double avgFeatureWinMultiplier = collectionTriggerSpins > 0 ? (double)(totalFeatureWin - totalJackpotBonusWin) / (collectionTriggerSpins * 100.0) : 0.0;
-        double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin) / (totalSpins * 100.0);
+        double avgFeatureWinMultiplier = collectionTriggerSpins > 0 ? (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin) / (collectionTriggerSpins * 100.0) : 0.0;
+        double avgCollectedCashMultiplier = collectionTriggerSpins > 0 ? totalCollectCashMultiplierSum / collectionTriggerSpins : 0.0;
+        double avgCollectedFireCores = collectionTriggerSpins > 0 ? (double)totalCollectFireCoresCount / collectionTriggerSpins : 0.0;
+
+        // SECTION 2: Collector Feature
+        stats["Collector Feature Trigger Frequency"] = collectionTriggerFreqStr;
+        stats["Collector Average Pay when Triggered"] = $"{avgFeatureWinMultiplier:F2}x bet";
+        stats["Collector Total Triggers"] = collectionTriggerSpins.ToString("N0");
+        stats["Collector Single Collector Triggers (1x)"] = $"{collectTriggersWith1Collector:N0} ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith1Collector/collectionTriggerSpins : 0.0):P2})";
+        stats["Collector Double Collector Triggers (2x)"] = $"{collectTriggersWith2Collectors:N0} ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith2Collectors/collectionTriggerSpins : 0.0):P2})";
+        stats["Collector Average Cash Multiplier Collected"] = $"{avgCollectedCashMultiplier:F2}x bet";
+        stats["Collector Average Fire Cores Collected"] = $"{avgCollectedFireCores:F2}";
+        stats["Collector Waste Spins (Collector, no Cash)"] = $"{spinsWithCollectorButNoFireCore:N0} ({(double)spinsWithCollectorButNoFireCore/totalSpins:P2})";
+        stats["Collector Uncollected Spins (Cash, no Collector)"] = $"{spinsWithFireCoreButNoCollector:N0} ({(double)spinsWithFireCoreButNoCollector/totalSpins:P2})";
+        stats["Collector Landing Freq (Reel 0 or 4)"] = collectorLandingFreqStr;
+        stats["Collector Landing Fire Core Freq"] = fireCoreLandingFreqStr;
 
         double jackpotBonusTriggerChance = (double)totalJackpotBonusTriggers / totalSpins;
         string jackpotBonusTriggerFreqStr = jackpotBonusTriggerChance > 0 ? $"1 in {1.0 / jackpotBonusTriggerChance:F1} spins ({jackpotBonusTriggerChance:P4})" : "Never";
         double avgJackpotBonusWinMultiplier = totalJackpotBonusTriggers > 0 ? (double)totalJackpotBonusWin / (totalJackpotBonusTriggers * 100.0) : 0.0;
-        double jackpotBonusRtp = (double)totalJackpotBonusWin / (totalSpins * 100.0);
+        double avgFireCoresOnJackpotTrigger = totalJackpotBonusTriggers > 0 ? (double)totalFireCoresOnJackpotTrigger / totalJackpotBonusTriggers : 0.0;
 
-        stats["Jackpot Collect Feature RTP"] = $"{collectFeatureRtp:P2}";
-        stats["Jackpot Bonus RTP"] = $"{jackpotBonusRtp:P2}";
-        stats["Collection Trigger Frequency"] = collectionTriggerFreqStr;
-        stats["Average Pay when Collector Triggers"] = $"{avgFeatureWinMultiplier:F2}x bet";
-        stats["Landing Collector Frequency (Reel 0 or 4)"] = collectorLandingFreqStr;
-        stats["Landing Fire Core Frequency"] = fireCoreLandingFreqStr;
+        // SECTION 3: Jackpot Bonus
         stats["Jackpot Bonus Trigger Frequency"] = jackpotBonusTriggerFreqStr;
-        stats["Average Pay when Jackpot Bonus Triggers"] = $"{avgJackpotBonusWinMultiplier:F2}x bet";
-
+        stats["Jackpot Bonus Average Win"] = $"{avgJackpotBonusWinMultiplier:F2}x bet";
+        stats["Jackpot Bonus Average Fire Cores on Trigger"] = $"{avgFireCoresOnJackpotTrigger:F2}";
         foreach (var jpName in config.JackpotNames)
         {
             int hits = jackpotHits[jpName];
             double winChanceInBonus = totalJackpotBonusTriggers > 0 ? (double)hits / totalJackpotBonusTriggers : 0.0;
             double jpRtp = (double)jackpotWins[jpName] / (totalSpins * 100.0);
             string jpFreqInBonus = winChanceInBonus > 0 ? $"1 in {1.0 / winChanceInBonus:F1} triggers" : "Never";
-            
-            stats[$"{jpName} Jackpot Hits"] = hits.ToString("N0");
-            stats[$"{jpName} Jackpot RTP"] = $"{jpRtp:P4}";
-            stats[$"{jpName} Jackpot Win % in Bonus"] = $"{winChanceInBonus:P2} ({jpFreqInBonus})";
+            stats[$"Jackpot {jpName} Hits"] = hits.ToString("N0");
+            stats[$"Jackpot {jpName} RTP"] = $"{jpRtp:P4}";
+            stats[$"Jackpot {jpName} Win % in Bonus"] = $"{winChanceInBonus:P2} ({jpFreqInBonus})";
         }
-
-        stats["Stage 6 Power Max Triggers"] = totalPowerUpTriggers.ToString("N0");
-        stats["Number of Base Game Stages"] = config.BaseGameStageWeights.Count.ToString();
-        stats["Total Stage Spins Sum"] = string.Join(", ", config.StageSpinsToNext);
-        
-        // Add pots trigger and progression stats
-        for (int p = 0; p < 4; p++)
+        for (int c = 1; c < jackpotTriggersByFireCoreCount.Length; c++)
         {
-            double landingChance = (double)spinsWithPotTrigger[p] / totalSpins;
-            string landingFreqStr = landingChance > 0 ? $"1 in {1.0 / landingChance:F1} spins ({landingChance:P2})" : "Never";
-            double triggerChance = (double)totalPotTriggers[p] / totalSpins;
-            string triggerFreqStr = triggerChance > 0 ? $"1 in {1.0 / triggerChance:F1} spins ({triggerChance:P4})" : "Never";
-            double avgPower = totalPotTriggers[p] > 0 ? (double)totalPotTriggerPowers[p] / totalPotTriggers[p] : 0.0;
-
-            stats[$"Landing Pot {p + 1} Trigger Frequency"] = landingFreqStr;
-            stats[$"Pot {p + 1} Bonus Trigger Frequency"] = triggerFreqStr;
-            stats[$"Average Pot {p + 1} Power on Trigger"] = $"{avgPower:F2}";
+            int hits = jackpotTriggersByFireCoreCount[c];
+            if (hits > 0)
+            {
+                stats[$"Jackpot Triggered by Landed {c} Fire Cores"] = $"{hits:N0} ({(double)hits/totalJackpotBonusTriggers:P2})";
+            }
         }
 
+        double avgLockSlingoSlingos = totalLockSlingoTriggers > 0 ? (double)totalLockSlingoSlingosCompleted / totalLockSlingoTriggers : 0.0;
+        double avgLockSlingoCashSum = totalLockSlingoTriggers > 0 ? totalLockSlingoCashSum / totalLockSlingoTriggers : 0.0;
+        double avgLockSlingoLadderSum = totalLockSlingoTriggers > 0 ? totalLockSlingoLadderSum / totalLockSlingoTriggers : 0.0;
+        double lockSlingoMinWinPercent = totalLockSlingoTriggers > 0 ? (double)totalLockSlingoMinWinApplied / totalLockSlingoTriggers : 0.0;
+
+        double landingChance1 = (double)spinsWithPotTrigger[0] / totalSpins;
+        string landingFreqStr1 = landingChance1 > 0 ? $"1 in {1.0 / landingChance1:F1} spins ({landingChance1:P2})" : "Never";
+        double avgPower1 = totalPotTriggers[0] > 0 ? (double)totalPotTriggerPowers[0] / totalPotTriggers[0] : 0.0;
+
+        // SECTION 4: Bonus 1 (Lock & Slingo)
+        stats["Bonus 1 Landing Pot Trigger Freq"] = landingFreqStr1;
+        stats["Bonus 1 Trigger Frequency"] = lockSlingoTriggerFreqStr;
+        stats["Bonus 1 Average Power on Trigger"] = $"{avgPower1:F2}";
+        stats["Bonus 1 Average Starting Spins"] = $"{avgStartingSpins:F2} spins";
+        stats["Bonus 1 Average Win"] = $"{avgLockSlingoWinMultiplier:F2}x bet";
+        stats["Bonus 1 Average Completed Slingos"] = $"{avgLockSlingoSlingos:F2}";
+        stats["Bonus 1 Average Cash Values Sum"] = $"{avgLockSlingoCashSum:F2}x bet";
+        stats["Bonus 1 Average Ladder Prize"] = $"{avgLockSlingoLadderSum:F2}x bet";
+        stats["Bonus 1 Guaranteed Minimum Applied %"] = $"{lockSlingoMinWinPercent:P2}";
+
+        for (int L = 0; L < lockSlingoTriggersByPower.Length; L++)
+        {
+            int hits = lockSlingoTriggersByPower[L];
+            double pctOfTriggers = totalLockSlingoTriggers > 0 ? (double)hits / totalLockSlingoTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            stats[$"Bonus 1 Power {L} ({config.LockSlingoSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
+        }
+
+        // SECTION 5: Bonus 2
+        double landingChance2 = (double)spinsWithPotTrigger[1] / totalSpins;
+        string landingFreqStr2 = landingChance2 > 0 ? $"1 in {1.0 / landingChance2:F1} spins ({landingChance2:P2})" : "Never";
+        double triggerChance2 = (double)totalPotTriggers[1] / totalSpins;
+        string triggerFreqStr2 = triggerChance2 > 0 ? $"1 in {1.0 / triggerChance2:F1} spins ({triggerChance2:P4})" : "Never";
+        double avgPower2 = totalPotTriggers[1] > 0 ? (double)totalPotTriggerPowers[1] / totalPotTriggers[1] : 0.0;
+
+        stats["Bonus 2 Landing Pot Trigger Freq"] = landingFreqStr2;
+        stats["Bonus 2 Trigger Frequency"] = triggerFreqStr2;
+        stats["Bonus 2 Average Power on Trigger"] = $"{avgPower2:F2}";
+
+        // SECTION 6: Bonus 3
+        double landingChance3 = (double)spinsWithPotTrigger[2] / totalSpins;
+        string landingFreqStr3 = landingChance3 > 0 ? $"1 in {1.0 / landingChance3:F1} spins ({landingChance3:P2})" : "Never";
+        double triggerChance3 = (double)totalPotTriggers[2] / totalSpins;
+        string triggerFreqStr3 = triggerChance3 > 0 ? $"1 in {1.0 / triggerChance3:F1} spins ({triggerChance3:P4})" : "Never";
+        double avgPower3 = totalPotTriggers[2] > 0 ? (double)totalPotTriggerPowers[2] / totalPotTriggers[2] : 0.0;
+
+        stats["Bonus 3 Landing Pot Trigger Freq"] = landingFreqStr3;
+        stats["Bonus 3 Trigger Frequency"] = triggerFreqStr3;
+        stats["Bonus 3 Average Power on Trigger"] = $"{avgPower3:F2}";
+
+        // SECTION 7: Bonus 4
+        double landingChance4 = (double)spinsWithPotTrigger[3] / totalSpins;
+        string landingFreqStr4 = landingChance4 > 0 ? $"1 in {1.0 / landingChance4:F1} spins ({landingChance4:P2})" : "Never";
+        double triggerChance4 = (double)totalPotTriggers[3] / totalSpins;
+        string triggerFreqStr4 = triggerChance4 > 0 ? $"1 in {1.0 / triggerChance4:F1} spins ({triggerChance4:P4})" : "Never";
+        double avgPower4 = totalPotTriggers[3] > 0 ? (double)totalPotTriggerPowers[3] / totalPotTriggers[3] : 0.0;
+
+        stats["Bonus 4 Landing Pot Trigger Freq"] = landingFreqStr4;
+        stats["Bonus 4 Trigger Frequency"] = triggerFreqStr4;
+        stats["Bonus 4 Average Power on Trigger"] = $"{avgPower4:F2}";
+
+        // Console Prints following the exact structured hierarchy:
         Console.WriteLine($"Simulation complete!");
-        Console.WriteLine($"  - Total RTP: {totalRtp:P2} (Line RTP: {lineWinRtp:P2}, Collect Feature RTP: {collectFeatureRtp:P2}, Jackpot Bonus RTP: {jackpotBonusRtp:P2})");
+        Console.WriteLine($"  - Total RTP: {totalRtp:P2} (Line RTP: {lineWinRtp:P2}, Collect Feature RTP: {collectFeatureRtp:P2}, Jackpot Bonus RTP: {jackpotBonusRtp:P2}, Lock & Slingo RTP: {lockSlingoRtp:P2})");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
+        
+        Console.WriteLine("\n=========================================================================================");
+        Console.WriteLine("INDIVIDUAL FEATURE STATS BREAKDOWNS:");
+        Console.WriteLine("=========================================================================================");
+
+        Console.WriteLine("\n[Collector Feature]");
+        Console.WriteLine($"  - Collect Feature RTP: {collectFeatureRtp:P2}");
         Console.WriteLine($"  - Collection Trigger Freq: {collectionTriggerFreqStr}");
         Console.WriteLine($"  - Average Pay when Collector Triggers: {avgFeatureWinMultiplier:F2}x bet");
-        Console.WriteLine($"  - Landing Collector Freq: {collectorLandingFreqStr}");
+        Console.WriteLine($"  - Total Collection Triggers: {collectionTriggerSpins}");
+        Console.WriteLine($"    - Single Collector (1x collect): {collectTriggersWith1Collector} triggers ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith1Collector/collectionTriggerSpins : 0.0):P2})");
+        Console.WriteLine($"    - Double Collector (2x collect): {collectTriggersWith2Collectors} triggers ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith2Collectors/collectionTriggerSpins : 0.0):P2})");
+        Console.WriteLine($"  - Avg Cash Value Sum Collected: {avgCollectedCashMultiplier:F2}x bet");
+        Console.WriteLine($"  - Avg Fire Cores Collected: {avgCollectedFireCores:F2}");
+        Console.WriteLine($"  - Spins with Collector but no Fire Core (Waste): {spinsWithCollectorButNoFireCore} spins ({(double)spinsWithCollectorButNoFireCore/totalSpins:P2})");
+        Console.WriteLine($"  - Spins with Fire Core but no Collector (Uncollected): {spinsWithFireCoreButNoCollector} spins ({(double)spinsWithFireCoreButNoCollector/totalSpins:P2})");
+        Console.WriteLine($"  - Landing Collector Freq (Reel 0 or 4): {collectorLandingFreqStr}");
         Console.WriteLine($"  - Landing Fire Core Freq: {fireCoreLandingFreqStr}");
+
+        Console.WriteLine("\n[Jackpot Bonus]");
+        Console.WriteLine($"  - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
         Console.WriteLine($"  - Jackpot Bonus Trigger Freq: {jackpotBonusTriggerFreqStr}");
         Console.WriteLine($"  - Average Pay when Jackpot Bonus Triggers: {avgJackpotBonusWinMultiplier:F2}x bet");
-        
-        Console.WriteLine("\nPot Progression & Trigger Breakdown:");
-        for (int p = 0; p < 4; p++)
+        Console.WriteLine($"  - Avg Fire Cores on Screen when Triggered: {avgFireCoresOnJackpotTrigger:F2}");
+        Console.WriteLine("  - Hit Distribution by Landing Fire Cores Count:");
+        for (int c = 1; c < jackpotTriggersByFireCoreCount.Length; c++)
         {
-            double landingChance = (double)spinsWithPotTrigger[p] / totalSpins;
-            string landingFreqStr = landingChance > 0 ? $"1 in {1.0 / landingChance:F1} spins ({landingChance:P2})" : "Never";
-            double triggerChance = (double)totalPotTriggers[p] / totalSpins;
-            string triggerFreqStr = triggerChance > 0 ? $"1 in {1.0 / triggerChance:F1} spins ({triggerChance:P4})" : "Never";
-            double avgPower = totalPotTriggers[p] > 0 ? (double)totalPotTriggerPowers[p] / totalPotTriggers[p] : 0.0;
-
-            Console.WriteLine($"  - Pot {p + 1}: Landing Freq = {landingFreqStr} | Bonus Trigger Freq = {triggerFreqStr} | Avg Power on Trigger = {avgPower:F2}");
+            int hits = jackpotTriggersByFireCoreCount[c];
+            if (hits > 0)
+            {
+                double pctOfTriggers = totalJackpotBonusTriggers > 0 ? (double)hits / totalJackpotBonusTriggers : 0.0;
+                Console.WriteLine($"    Landed {c} Fire Cores: Hits = {hits,4} | {pctOfTriggers,6:P2} of triggers");
+            }
         }
-        
-        Console.WriteLine("\nJackpot Breakdown:");
+        Console.WriteLine("  - Jackpot Winners Distribution:");
         foreach (var jpName in config.JackpotNames)
         {
             int hits = jackpotHits[jpName];
             double winChanceInBonus = totalJackpotBonusTriggers > 0 ? (double)hits / totalJackpotBonusTriggers : 0.0;
             double jpRtp = (double)jackpotWins[jpName] / (totalSpins * 100.0);
             string jpFreqInBonus = winChanceInBonus > 0 ? $"1 in {1.0 / winChanceInBonus:F1} triggers" : "Never";
-            Console.WriteLine($"  - {jpName,-6} Jackpot: Hits = {hits,6:N0} | RTP = {jpRtp,8:P4} | Win Chance in Bonus = {winChanceInBonus,8:P2} ({jpFreqInBonus})");
+            Console.WriteLine($"    - {jpName,-6} Jackpot: Hits = {hits,6:N0} | RTP = {jpRtp,8:P4} | Win Chance in Bonus = {winChanceInBonus,8:P2} ({jpFreqInBonus})");
         }
-        
+
+        Console.WriteLine("\n[Bonus 1 - Lock & Slingo]");
+        Console.WriteLine($"  - Lock & Slingo Total RTP: {lockSlingoRtp:P2}");
+        Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr1}");
+        Console.WriteLine($"  - Trigger Frequency: {lockSlingoTriggerFreqStr}");
+        Console.WriteLine($"  - Average Power on Trigger: {avgPower1:F2}");
+        Console.WriteLine($"  - Average Starting Spins: {avgStartingSpins:F2} spins");
+        Console.WriteLine($"  - Average Lock & Slingo Win: {avgLockSlingoWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Completed Slingos: {avgLockSlingoSlingos:F2}");
+        Console.WriteLine($"  - Average Cash Values Sum: {avgLockSlingoCashSum:F2}x bet");
+        Console.WriteLine($"  - Average Ladder Prize: {avgLockSlingoLadderSum:F2}x bet");
+        Console.WriteLine($"  - Guaranteed Minimum Win Applied %: {lockSlingoMinWinPercent:P2}");
+        Console.WriteLine("  - Hit Distribution by Power Level:");
+        for (int L = 0; L < lockSlingoTriggersByPower.Length; L++)
+        {
+            int hits = lockSlingoTriggersByPower[L];
+            double pctOfTriggers = totalLockSlingoTriggers > 0 ? (double)hits / totalLockSlingoTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            Console.WriteLine($"    Power Level {L} ({config.LockSlingoSpins[L]} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of total triggers | {freqStr}");
+        }
+
+        Console.WriteLine("\n[Bonus 2]");
+        Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr2}");
+        Console.WriteLine($"  - Trigger Frequency: {triggerFreqStr2}");
+        Console.WriteLine($"  - Average Power on Trigger: {avgPower2:F2}");
+        Console.WriteLine("  - Bonus 2 RTP: 0.00% (Placeholder)");
+
+        Console.WriteLine("\n[Bonus 3]");
+        Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr3}");
+        Console.WriteLine($"  - Trigger Frequency: {triggerFreqStr3}");
+        Console.WriteLine($"  - Average Power on Trigger: {avgPower3:F2}");
+        Console.WriteLine("  - Bonus 3 RTP: 0.00% (Placeholder)");
+
+        Console.WriteLine("\n[Bonus 4]");
+        Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr4}");
+        Console.WriteLine($"  - Trigger Frequency: {triggerFreqStr4}");
+        Console.WriteLine($"  - Average Power on Trigger: {avgPower4:F2}");
+        Console.WriteLine("  - Bonus 4 RTP: 0.00% (Placeholder)");
+
         Console.WriteLine($"\nStage 6 Power Max Triggers Count: {totalPowerUpTriggers}");
     }
     else
     {
-        double jackpotBonusRtp = (double)totalJackpotBonusWin / (totalSpins * 100.0);
-        double collectFeatureRtp = (totalFeatureWin - totalJackpotBonusWin) / (totalSpins * 100.0);
-        
-        stats["Jackpot Collect Feature RTP"] = $"{collectFeatureRtp:P2}";
-        stats["Jackpot Bonus RTP"] = $"{jackpotBonusRtp:P2}";
-        
         Console.WriteLine($"Simulation complete!");
-        Console.WriteLine($"  - Total RTP: {totalRtp:P2} (Line RTP: {lineWinRtp:P2}, Collect Feature RTP: {collectFeatureRtp:P2}, Jackpot Bonus RTP: {jackpotBonusRtp:P2})");
+        Console.WriteLine($"  - Total RTP: {totalRtp:P2} (Line RTP: {lineWinRtp:P2}, Collect Feature RTP: {collectFeatureRtp:P2}, Jackpot Bonus RTP: {jackpotBonusRtp:P2}, Lock & Slingo RTP: {lockSlingoRtp:P2})");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
+        
+        Console.WriteLine("\n=========================================================================================");
+        Console.WriteLine("INDIVIDUAL FEATURE STATS BREAKDOWNS:");
+        Console.WriteLine("=========================================================================================");
+        
+        Console.WriteLine("\n[Collector Feature]");
+        Console.WriteLine($"  - Collect Feature RTP: {collectFeatureRtp:P2}");
+
+        Console.WriteLine("\n[Jackpot Bonus]");
+        Console.WriteLine($"  - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
+
+        Console.WriteLine("\n[Bonus 1 - Lock & Slingo]");
+        Console.WriteLine($"  - Lock & Slingo Trigger Freq: {lockSlingoTriggerFreqStr}");
+        Console.WriteLine($"  - Lock & Slingo Total RTP: {lockSlingoRtp:P2}");
+        Console.WriteLine($"  - Average Lock & Slingo Win: {avgLockSlingoWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Starting Spins: {avgStartingSpins:F2} spins");
+
+        Console.WriteLine("\n[Bonus 2]");
+        Console.WriteLine("  - Bonus 2 RTP: 0.00% (Placeholder)");
+
+        Console.WriteLine("\n[Bonus 3]");
+        Console.WriteLine("  - Bonus 3 RTP: 0.00% (Placeholder)");
+
+        Console.WriteLine("\n[Bonus 4]");
+        Console.WriteLine("  - Bonus 4 RTP: 0.00% (Placeholder)");
     }
     
     Console.WriteLine($"\nWriting simulation results to: {resultsPath}");
