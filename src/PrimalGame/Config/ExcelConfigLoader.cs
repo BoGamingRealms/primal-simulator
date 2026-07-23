@@ -434,6 +434,90 @@ public class ExcelConfigLoader
             }
         }
 
+        // Load Apex Spins (Bonus 2) Top Award Multipliers from Row 166 (index 165)
+        if (dataTable.Rows.Count > 165)
+        {
+            var row = dataTable.Rows[165];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ApexSpinsTopAwardMultipliers = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Apex Spins Trigger Weights from Row 167 (index 166)
+        if (dataTable.Rows.Count > 166)
+        {
+            var row = dataTable.Rows[166];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ApexSpinsTriggerWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Apex Spins Bonus Minimums from Row 168 (index 167)
+        if (dataTable.Rows.Count > 167)
+        {
+            var row = dataTable.Rows[167];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ApexSpinsBonusMinimums = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Apex Spins Reelset Weights from Row 169 (index 168)
+        if (dataTable.Rows.Count > 168)
+        {
+            var row = dataTable.Rows[168];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ApexSpinsReelsetWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Apex Spins Reelsets starting from Row 170 (index 169)
+        int apexStartRowIndex = 169;
+        for (int setIdx = 0; setIdx < 7; setIdx++)
+        {
+            int rStart = apexStartRowIndex + (setIdx * 5);
+            if (rStart + 4 >= dataTable.Rows.Count) break;
+
+            var headerRow = dataTable.Rows[rStart];
+            string reelsetName = headerRow[0]?.ToString()?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(reelsetName))
+            {
+                reelsetName = $"Reelset{setIdx}";
+            }
+
+            int[][] reels = new int[5][];
+            for (int r = 0; r < 5; r++)
+            {
+                var rRow = dataTable.Rows[rStart + r];
+                var cellB = rRow[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(cellB))
+                {
+                    reels[r] = cellB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+
+            config.ApexSpinsReelsets[reelsetName] = new ReelSet(reels);
+        }
+
         config.PrepareForSimulation();
 
         return config;

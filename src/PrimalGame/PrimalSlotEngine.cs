@@ -57,7 +57,11 @@ namespace PrimalGame
                 int p = rng.Next(4);
                 if (p == 0)
                 {
-                    _potPowers[0] = _config.LockSlingoSpins.Length - 1;
+                    _potPowers[0] = Math.Max(0, _config.LockSlingoSpins.Length - 1);
+                }
+                else if (p == 1)
+                {
+                    _potPowers[1] = Math.Max(0, _config.ApexSpinsTopAwardMultipliers.Length - 1);
                 }
                 else
                 {
@@ -338,16 +342,18 @@ namespace PrimalGame
                     {
                         // Pot 1: Lock & Slingo Trigger
                         int maxPower = _config.LockSlingoSpins.Length - 1;
-                        int chanceWeight = _config.LockSlingoTriggerWeights[_potPowers[0]];
+                        int currentPower = Math.Min(maxPower, _potPowers[0]);
+                        int chanceWeight = _config.LockSlingoTriggerWeights[currentPower];
                         if (rng.Next(chanceWeight) < count)
                         {
-                            // Triggered!
-                            int triggeredPower = Math.Min(maxPower, _potPowers[0] + (count - 1));
+                            // Triggered! Power increases by N - 1
+                            int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
                             long bonusWin = RunLockSlingoBonus(triggeredPower, rng, out int completedSlingos, out double cashSum, out double ladderPrize, out bool minWinApplied);
                             
                             spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
                             {
                                 PotIndex = 0,
+                                BonusName = "Lock & Slingo",
                                 Power = triggeredPower,
                                 Win = bonusWin,
                                 CompletedSlingos = completedSlingos,
@@ -363,8 +369,41 @@ namespace PrimalGame
                         }
                         else
                         {
-                            // Not triggered, increase power
-                            _potPowers[0] = Math.Min(maxPower, _potPowers[0] + count);
+                            // Not triggered, increase power by count
+                            _potPowers[0] = Math.Min(maxPower, currentPower + count);
+                        }
+                    }
+                    else if (p == 1)
+                    {
+                        // Pot 2: Apex Spins Trigger
+                        int maxPower = _config.ApexSpinsTopAwardMultipliers.Length - 1;
+                        int currentPower = Math.Min(maxPower, _potPowers[1]);
+                        int chanceWeight = _config.ApexSpinsTriggerWeights[currentPower];
+                        if (rng.Next(chanceWeight) < count)
+                        {
+                            // Triggered! Power increases by N - 1
+                            int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
+                            long bonusWin = RunApexSpinsBonus(triggeredPower, rng, out int spinsPlayed, out bool minWinApplied);
+
+                            spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
+                            {
+                                PotIndex = 1,
+                                BonusName = "Apex Spins",
+                                Power = triggeredPower,
+                                Win = bonusWin,
+                                SpinsPlayed = spinsPlayed,
+                                MinWinApplied = minWinApplied
+                            });
+
+                            spinResult.FeatureWin += bonusWin;
+                            spinResult.TotalWin += bonusWin;
+
+                            _potPowers[1] = 0; // reset
+                        }
+                        else
+                        {
+                            // Not triggered, increase power by count
+                            _potPowers[1] = Math.Min(maxPower, currentPower + count);
                         }
                     }
                     else
@@ -398,6 +437,122 @@ namespace PrimalGame
             }
 
             spinResult.PotPowersAfter = _potPowers.ToArray();
+        }
+
+        private long RunApexSpinsBonus(int powerLevel, IRng rng, out int spinsPlayed, out bool minWinApplied)
+        {
+            double topSpinAwardMultiplier = _config.ApexSpinsTopAwardMultipliers[powerLevel];
+            long topSpinAwardInCents = (long)Math.Round(topSpinAwardMultiplier * 100.0);
+
+            bool[,] lockedWilds = new bool[5, 3];
+            spinsPlayed = 0;
+            long totalBonusWinInCents = 0;
+
+            while (true)
+            {
+                spinsPlayed++;
+
+                // Pick a reelset based on weights
+                int chosenIdx = ChooseWeightedIndex(_config.ApexSpinsReelsetWeights, rng);
+                string reelsetName = $"Reelset{chosenIdx}";
+
+                if (!_config.ApexSpinsReelsets.TryGetValue(reelsetName, out var reelset))
+                {
+                    reelset = _config.ApexSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
+                }
+
+                int[][] screenSymbols = new int[5][];
+                for (int r = 0; r < 5; r++)
+                {
+                    screenSymbols[r] = new int[3];
+                    var strip = reelset.Reels[r];
+                    int stopIndex = rng.Next(strip.Length);
+                    screenSymbols[r][0] = reelset.GetSymbolAt(r, stopIndex, 0);
+                    screenSymbols[r][1] = reelset.GetSymbolAt(r, stopIndex, 1);
+                    screenSymbols[r][2] = reelset.GetSymbolAt(r, stopIndex, 2);
+                }
+
+                // Apply locked Wilds & lock any new Wilds
+                for (int r = 0; r < 5; r++)
+                {
+                    for (int row = 0; row < 3; row++)
+                    {
+                        if (lockedWilds[r, row])
+                        {
+                            screenSymbols[r][row] = _config.WildSymbolId;
+                        }
+                        else if (screenSymbols[r][row] == _config.WildSymbolId)
+                        {
+                            lockedWilds[r, row] = true;
+                        }
+                    }
+                }
+
+                // Evaluate line wins for this spin
+                long singleSpinWin = EvaluateGridLineWins(screenSymbols);
+                totalBonusWinInCents += singleSpinWin;
+
+                // Stop condition: single spin win >= top spin award
+                if (singleSpinWin >= topSpinAwardInCents)
+                {
+                    break;
+                }
+            }
+
+            // Guaranteed Bonus Minimum if stage >= 5
+            minWinApplied = false;
+            if (_stageIndex >= 5 && _config.ApexSpinsBonusMinimums.Length > powerLevel)
+            {
+                double minWinMultiplier = _config.ApexSpinsBonusMinimums[powerLevel];
+                long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
+                if (totalBonusWinInCents < minWinInCents)
+                {
+                    totalBonusWinInCents = minWinInCents;
+                    minWinApplied = true;
+                }
+            }
+
+            return totalBonusWinInCents;
+        }
+
+        private long EvaluateGridLineWins(int[][] screenSymbols)
+        {
+            long totalWin = 0;
+            for (int lineId = 0; lineId < _config.Paylines.Length; lineId++)
+            {
+                var payline = _config.Paylines[lineId];
+                long maxPayout = 0;
+
+                foreach (var sym in _config.Symbols)
+                {
+                    if (sym.IsWild || sym.IsScatter || sym.Id >= 9) continue;
+
+                    int matchCount = 0;
+                    for (int reel = 0; reel < 5; reel++)
+                    {
+                        int rowIndex = payline[reel];
+                        int screenSym = screenSymbols[reel][rowIndex];
+
+                        if (screenSym == sym.Id || screenSym == _config.WildSymbolId)
+                        {
+                            matchCount++;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+
+                    long payout = _config.FastPaytable[sym.Id][matchCount];
+                    if (payout > maxPayout)
+                    {
+                        maxPayout = payout;
+                    }
+                }
+
+                totalWin += maxPayout;
+            }
+            return totalWin;
         }
 
         private long RunLockSlingoBonus(int powerLevel, IRng rng, out int completedSlingos, out double cashValuesSum, out double ladderPrize, out bool minWinApplied)

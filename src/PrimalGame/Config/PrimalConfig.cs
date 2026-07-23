@@ -57,6 +57,13 @@ public class PrimalConfig
     public int[] LockSlingoFireCoreWeights { get; set; } = Array.Empty<int>();
     public List<PotLandingWeight> LockSlingoLandingChanceWeights { get; set; } = new();
 
+    // Apex Spins (Bonus 2) configuration
+    public double[] ApexSpinsTopAwardMultipliers { get; set; } = Array.Empty<double>();
+    public int[] ApexSpinsTriggerWeights { get; set; } = Array.Empty<int>();
+    public double[] ApexSpinsBonusMinimums { get; set; } = Array.Empty<double>();
+    public int[] ApexSpinsReelsetWeights { get; set; } = Array.Empty<int>();
+    public Dictionary<string, ReelSet> ApexSpinsReelsets { get; set; } = new();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();

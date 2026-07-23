@@ -144,6 +144,15 @@ try
     int totalLockSlingoMinWinApplied = 0;
     long totalLockSlingoSpinsAwarded = 0;
     int[] lockSlingoTriggersByPower = new int[config.LockSlingoSpins.Length];
+
+    // Detailed stats for Apex Spins (Bonus 2)
+    int totalApexSpinsTriggers = 0;
+    long totalApexSpinsWin = 0;
+    long totalApexSpinsPlayed = 0;
+    int totalApexSpinsMinWinApplied = 0;
+    int[] apexSpinsTriggersByPower = new int[config.ApexSpinsTopAwardMultipliers.Length];
+    long[] apexSpinsWinByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
+    long[] apexSpinsPlayedByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
     
     // Detailed collect feature stats
     int collectTriggersWith1Collector = 0;
@@ -294,6 +303,22 @@ try
                         lockSlingoTriggersByPower[potBonus.Power]++;
                     }
                 }
+                else if (p == 1)
+                {
+                    totalApexSpinsTriggers++;
+                    totalApexSpinsWin += potBonus.Win;
+                    totalApexSpinsPlayed += potBonus.SpinsPlayed;
+                    if (potBonus.MinWinApplied)
+                    {
+                        totalApexSpinsMinWinApplied++;
+                    }
+                    if (potBonus.Power >= 0 && potBonus.Power < apexSpinsTriggersByPower.Length)
+                    {
+                        apexSpinsTriggersByPower[potBonus.Power]++;
+                        apexSpinsWinByPower[potBonus.Power] += potBonus.Win;
+                        apexSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                }
             }
         }
         else
@@ -303,7 +328,6 @@ try
                 totalJackpotBonusWin += spinResult.JackpotBonusWin;
             }
             
-            // In basic mode, only sum Lock & Slingo wins for proper RTP mapping and power spins count
             foreach (var potBonus in spinResult.TriggeredPotBonuses)
             {
                 if (potBonus.PotIndex == 0)
@@ -311,6 +335,12 @@ try
                     totalLockSlingoTriggers++;
                     totalLockSlingoWin += potBonus.Win;
                     totalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
+                }
+                else if (potBonus.PotIndex == 1)
+                {
+                    totalApexSpinsTriggers++;
+                    totalApexSpinsWin += potBonus.Win;
+                    totalApexSpinsPlayed += potBonus.SpinsPlayed;
                 }
             }
         }
@@ -326,8 +356,14 @@ try
     double avgLockSlingoWinMultiplier = totalLockSlingoTriggers > 0 ? (double)totalLockSlingoWin / (totalLockSlingoTriggers * 100.0) : 0.0;
     double avgStartingSpins = totalLockSlingoTriggers > 0 ? (double)totalLockSlingoSpinsAwarded / totalLockSlingoTriggers : 0.0;
 
+    double apexSpinsRtp = (double)totalApexSpinsWin / (totalSpins * 100.0);
+    double apexSpinsTriggerChance = (double)totalApexSpinsTriggers / totalSpins;
+    string apexSpinsTriggerFreqStr = apexSpinsTriggerChance > 0 ? $"1 in {1.0 / apexSpinsTriggerChance:F1} spins ({apexSpinsTriggerChance:P4})" : "Never";
+    double avgApexSpinsWinMultiplier = totalApexSpinsTriggers > 0 ? (double)totalApexSpinsWin / (totalApexSpinsTriggers * 100.0) : 0.0;
+    double avgApexSpinsSpinsPlayed = totalApexSpinsTriggers > 0 ? (double)totalApexSpinsPlayed / totalApexSpinsTriggers : 0.0;
+
     double jackpotBonusRtp = (double)totalJackpotBonusWin / (totalSpins * 100.0);
-    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin) / (totalSpins * 100.0);
+    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin) / (totalSpins * 100.0);
     
     // Construct order-preserving stats dictionary following the requested sections
     var stats = new Dictionary<string, string>();
@@ -342,7 +378,7 @@ try
     stats["Collector Feature RTP"] = $"{collectFeatureRtp:P2}";
     stats["Jackpot Bonus RTP"] = $"{jackpotBonusRtp:P2}";
     stats["Lock & Slingo (Bonus 1) RTP"] = $"{lockSlingoRtp:P2}";
-    stats["Bonus 2 RTP"] = "0.00%";
+    stats["Apex Spins (Bonus 2) RTP"] = $"{apexSpinsRtp:P2}";
     stats["Bonus 3 RTP"] = "0.00%";
     stats["Bonus 4 RTP"] = "0.00%";
     stats["Hit Frequency"] = $"{hitFreq:P2}";
@@ -359,7 +395,7 @@ try
         string fireCoreLandingFreqStr = fireCoreLandingChance > 0 ? $"1 in {1.0 / fireCoreLandingChance:F1} spins ({fireCoreLandingChance:P2})" : "Never";
         string collectionTriggerFreqStr = collectionTriggerChance > 0 ? $"1 in {1.0 / collectionTriggerChance:F1} spins ({collectionTriggerChance:P2})" : "Never";
 
-        double avgFeatureWinMultiplier = collectionTriggerSpins > 0 ? (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin) / (collectionTriggerSpins * 100.0) : 0.0;
+        double avgFeatureWinMultiplier = collectionTriggerSpins > 0 ? (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin) / (collectionTriggerSpins * 100.0) : 0.0;
         double avgCollectedCashMultiplier = collectionTriggerSpins > 0 ? totalCollectCashMultiplierSum / collectionTriggerSpins : 0.0;
         double avgCollectedFireCores = collectionTriggerSpins > 0 ? (double)totalCollectFireCoresCount / collectionTriggerSpins : 0.0;
 
@@ -433,16 +469,32 @@ try
             stats[$"Bonus 1 Power {L} ({config.LockSlingoSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
         }
 
-        // SECTION 5: Bonus 2
+        // SECTION 5: Bonus 2 (Apex Spins)
         double landingChance2 = (double)spinsWithPotTrigger[1] / totalSpins;
         string landingFreqStr2 = landingChance2 > 0 ? $"1 in {1.0 / landingChance2:F1} spins ({landingChance2:P2})" : "Never";
-        double triggerChance2 = (double)totalPotTriggers[1] / totalSpins;
-        string triggerFreqStr2 = triggerChance2 > 0 ? $"1 in {1.0 / triggerChance2:F1} spins ({triggerChance2:P4})" : "Never";
         double avgPower2 = totalPotTriggers[1] > 0 ? (double)totalPotTriggerPowers[1] / totalPotTriggers[1] : 0.0;
+        double apexSpinsMinWinPercent = totalApexSpinsTriggers > 0 ? (double)totalApexSpinsMinWinApplied / totalApexSpinsTriggers : 0.0;
 
         stats["Bonus 2 Landing Pot Trigger Freq"] = landingFreqStr2;
-        stats["Bonus 2 Trigger Frequency"] = triggerFreqStr2;
+        stats["Bonus 2 Trigger Frequency"] = apexSpinsTriggerFreqStr;
         stats["Bonus 2 Average Power on Trigger"] = $"{avgPower2:F2}";
+        stats["Bonus 2 Average Win"] = $"{avgApexSpinsWinMultiplier:F2}x bet";
+        stats["Bonus 2 Average Spins Played"] = $"{avgApexSpinsSpinsPlayed:F2} spins";
+        stats["Bonus 2 Guaranteed Minimum Applied %"] = $"{apexSpinsMinWinPercent:P2}";
+
+        for (int L = 0; L < apexSpinsTriggersByPower.Length; L++)
+        {
+            int hits = apexSpinsTriggersByPower[L];
+            double pctOfTriggers = totalApexSpinsTriggers > 0 ? (double)hits / totalApexSpinsTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            double avgWin = hits > 0 ? (double)apexSpinsWinByPower[L] / (hits * 100.0) : 0.0;
+            double avgSpins = hits > 0 ? (double)apexSpinsPlayedByPower[L] / hits : 0.0;
+
+            stats[$"Bonus 2 Power {L} (Top Award {config.ApexSpinsTopAwardMultipliers[L]}x) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
+            stats[$"Bonus 2 Power {L} Avg Win"] = $"{avgWin:F2}x bet";
+            stats[$"Bonus 2 Power {L} Avg Spins Played"] = $"{avgSpins:F2} spins";
+        }
 
         // SECTION 6: Bonus 3
         double landingChance3 = (double)spinsWithPotTrigger[2] / totalSpins;
@@ -473,7 +525,7 @@ try
         Console.WriteLine($"    - Collect Feature RTP: {collectFeatureRtp:P2}");
         Console.WriteLine($"    - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
         Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
-        Console.WriteLine($"    - Bonus 2 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Apex Spins (Bonus 2) RTP: {apexSpinsRtp:P2}");
         Console.WriteLine($"    - Bonus 3 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
@@ -542,11 +594,26 @@ try
             Console.WriteLine($"    Power Level {L} ({config.LockSlingoSpins[L]} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of total triggers | {freqStr}");
         }
 
-        Console.WriteLine("\n[Bonus 2]");
+        Console.WriteLine("\n[Bonus 2 - Apex Spins]");
+        Console.WriteLine($"  - Apex Spins Total RTP: {apexSpinsRtp:P2}");
         Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr2}");
-        Console.WriteLine($"  - Trigger Frequency: {triggerFreqStr2}");
+        Console.WriteLine($"  - Trigger Frequency: {apexSpinsTriggerFreqStr}");
         Console.WriteLine($"  - Average Power on Trigger: {avgPower2:F2}");
-        Console.WriteLine("  - Bonus 2 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"  - Average Win: {avgApexSpinsWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Spins Played: {avgApexSpinsSpinsPlayed:F2} spins");
+        Console.WriteLine($"  - Guaranteed Minimum Win Applied %: {apexSpinsMinWinPercent:P2}");
+        Console.WriteLine("  - Hit Distribution & Stats by Power Level:");
+        for (int L = 0; L < apexSpinsTriggersByPower.Length; L++)
+        {
+            int hits = apexSpinsTriggersByPower[L];
+            double pctOfTriggers = totalApexSpinsTriggers > 0 ? (double)hits / totalApexSpinsTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            double avgWin = hits > 0 ? (double)apexSpinsWinByPower[L] / (hits * 100.0) : 0.0;
+            double avgSpins = hits > 0 ? (double)apexSpinsPlayedByPower[L] / hits : 0.0;
+
+            Console.WriteLine($"    Power Level {L,2} (Top Award {config.ApexSpinsTopAwardMultipliers[L],2}x): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
+        }
 
         Console.WriteLine("\n[Bonus 3]");
         Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr3}");
@@ -564,13 +631,23 @@ try
     }
     else
     {
+        double landingChance2 = (double)spinsWithPotTrigger[1] / totalSpins;
+        string landingFreqStr2 = landingChance2 > 0 ? $"1 in {1.0 / landingChance2:F1} spins ({landingChance2:P2})" : "Never";
+        double avgPower2 = totalPotTriggers[1] > 0 ? (double)totalPotTriggerPowers[1] / totalPotTriggers[1] : 0.0;
+
+        stats["Bonus 2 Landing Pot Trigger Freq"] = landingFreqStr2;
+        stats["Bonus 2 Trigger Frequency"] = apexSpinsTriggerFreqStr;
+        stats["Bonus 2 Average Power on Trigger"] = $"{avgPower2:F2}";
+        stats["Bonus 2 Average Win"] = $"{avgApexSpinsWinMultiplier:F2}x bet";
+        stats["Bonus 2 Average Spins Played"] = $"{avgApexSpinsSpinsPlayed:F2} spins";
+
         Console.WriteLine($"Simulation complete!");
         Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
         Console.WriteLine($"    - Line Payout RTP: {lineWinRtp:P2}");
         Console.WriteLine($"    - Collect Feature RTP: {collectFeatureRtp:P2}");
         Console.WriteLine($"    - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
         Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
-        Console.WriteLine($"    - Bonus 2 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Apex Spins (Bonus 2) RTP: {apexSpinsRtp:P2}");
         Console.WriteLine($"    - Bonus 3 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
@@ -591,8 +668,11 @@ try
         Console.WriteLine($"  - Average Lock & Slingo Win: {avgLockSlingoWinMultiplier:F2}x bet");
         Console.WriteLine($"  - Average Starting Spins: {avgStartingSpins:F2} spins");
 
-        Console.WriteLine("\n[Bonus 2]");
-        Console.WriteLine("  - Bonus 2 RTP: 0.00% (Placeholder)");
+        Console.WriteLine("\n[Bonus 2 - Apex Spins]");
+        Console.WriteLine($"  - Apex Spins Trigger Freq: {apexSpinsTriggerFreqStr}");
+        Console.WriteLine($"  - Apex Spins Total RTP: {apexSpinsRtp:P2}");
+        Console.WriteLine($"  - Average Win: {avgApexSpinsWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Spins Played: {avgApexSpinsSpinsPlayed:F2} spins");
 
         Console.WriteLine("\n[Bonus 3]");
         Console.WriteLine("  - Bonus 3 RTP: 0.00% (Placeholder)");
