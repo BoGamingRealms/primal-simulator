@@ -563,21 +563,21 @@ namespace PrimalGame
             colossalSymbolWins = new Dictionary<int, long>();
             colossalSymbolHits = new Dictionary<int, int>();
 
-            // Pick a reelset ONCE at the start of the bonus based on weights
-            int chosenIdx = ChooseWeightedIndex(_config.ColossalSpinsReelsetWeights, rng);
-            string reelsetName = $"Reelset{chosenIdx}";
-
-            if (!_config.ColossalSpinsReelsets.TryGetValue(reelsetName, out var reelset))
-            {
-                reelset = _config.ColossalSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
-            }
-
-            int len0 = reelset.Reels[0].Length;
-            int lenMid = reelset.Reels[1].Length;
-            int len4 = reelset.Reels[4].Length;
-
             for (int spin = 0; spin < totalSpins; spin++)
             {
+                // Select a reelset for EACH colossal spin based on reelset weights
+                int chosenIdx = ChooseWeightedIndex(_config.ColossalSpinsReelsetWeights, rng);
+                string reelsetName = $"Reelset{chosenIdx}";
+
+                if (!_config.ColossalSpinsReelsets.TryGetValue(reelsetName, out var reelset))
+                {
+                    reelset = _config.ColossalSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
+                }
+
+                int len0 = reelset.Reels[0].Length;
+                int lenMid = reelset.Reels[1].Length;
+                int len4 = reelset.Reels[4].Length;
+
                 int[][] screenSymbols = new int[5][];
 
                 // Reel 0 (independent stop index)
