@@ -151,6 +151,13 @@ public class ColossalReelstripGenerator
             int currentSym = flatReel[i];
             int nextSym = flatReel[(i + 3) % len];
 
+            // Rule: No two adjacent colossal blocks can have the same symbol ID
+            if (currentSym == nextSym)
+            {
+                return false;
+            }
+
+            // Rule: Special/high pay blocks cannot be adjacent
             if (IsSpecialOrHighPay(currentSym) && IsSpecialOrHighPay(nextSym))
             {
                 return false;

@@ -51,4 +51,6 @@ public class TriggeredPotBonus
     public double CashValuesSum { get; set; }
     public double LadderPrize { get; set; }
     public bool MinWinApplied { get; set; }
+    public Dictionary<int, long> ColossalSymbolWins { get; set; } = new();
+    public Dictionary<int, int> ColossalSymbolHits { get; set; } = new();
 }

@@ -162,6 +162,10 @@ try
     int[] colossalSpinsTriggersByPower = new int[config.ColossalSpinsCounts.Length];
     long[] colossalSpinsWinByPower = new long[config.ColossalSpinsCounts.Length];
     long[] colossalSpinsPlayedByPower = new long[config.ColossalSpinsCounts.Length];
+
+    // Colossal Symbol Detailed Stats Breakdown
+    var colossalSymbolHits = new Dictionary<int, long>();
+    var colossalSymbolWins = new Dictionary<int, long>();
     
     // Detailed collect feature stats
     int collectTriggersWith1Collector = 0;
@@ -342,6 +346,19 @@ try
                         colossalSpinsTriggersByPower[potBonus.Power]++;
                         colossalSpinsWinByPower[potBonus.Power] += potBonus.Win;
                         colossalSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                    foreach (var kvp in potBonus.ColossalSymbolHits)
+                    {
+                        if (!colossalSymbolHits.ContainsKey(kvp.Key))
+                        {
+                            colossalSymbolHits[kvp.Key] = 0;
+                            colossalSymbolWins[kvp.Key] = 0;
+                        }
+                        colossalSymbolHits[kvp.Key] += kvp.Value;
+                        if (potBonus.ColossalSymbolWins.TryGetValue(kvp.Key, out long win))
+                        {
+                            colossalSymbolWins[kvp.Key] += win;
+                        }
                     }
                 }
             }
@@ -560,6 +577,21 @@ try
             stats[$"Bonus 3 Power {L} Avg Spins"] = $"{avgSpins:F2} spins";
         }
 
+        stats["Bonus 3 Colossal Symbols Breakdown"] = "---";
+        var sortedColossalSyms = colossalSymbolHits.Keys.OrderBy(id => id).ToList();
+        foreach (var symId in sortedColossalSyms)
+        {
+            long hits = colossalSymbolHits[symId];
+            long wins = colossalSymbolWins[symId];
+            double symRtp = (double)wins / (totalSpins * 100.0);
+            double avgWin = hits > 0 ? (double)wins / (hits * 100.0) : 0.0;
+            string symName = config.Symbols.FirstOrDefault(s => s.Id == symId)?.Name ?? $"Symbol {symId}";
+
+            stats[$"Colossal Symbol {symId} ({symName}) Landed Spins"] = $"{hits:N0} ({(totalColossalSpinsPlayed > 0 ? (double)hits / totalColossalSpinsPlayed : 0.0):P2} of colossal spins)";
+            stats[$"Colossal Symbol {symId} ({symName}) RTP"] = $"{symRtp:P4}";
+            stats[$"Colossal Symbol {symId} ({symName}) Avg Win"] = $"{avgWin:F2}x bet";
+        }
+
         // SECTION 7: Bonus 4
         double landingChance4 = (double)spinsWithPotTrigger[3] / totalSpins;
         string landingFreqStr4 = landingChance4 > 0 ? $"1 in {1.0 / landingChance4:F1} spins ({landingChance4:P2})" : "Never";
@@ -687,6 +719,18 @@ try
             double avgSpins = hits > 0 ? (double)colossalSpinsPlayedByPower[L] / hits : 0.0;
 
             Console.WriteLine($"    Power Level {L,2} ({config.ColossalSpinsCounts[L],2} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
+        }
+        Console.WriteLine("  - Colossal Symbols Breakdown:");
+        foreach (var symId in sortedColossalSyms)
+        {
+            long hits = colossalSymbolHits[symId];
+            long wins = colossalSymbolWins[symId];
+            double symRtp = (double)wins / (totalSpins * 100.0);
+            double pctOfColossalSpins = totalColossalSpinsPlayed > 0 ? (double)hits / totalColossalSpinsPlayed : 0.0;
+            double avgWin = hits > 0 ? (double)wins / (hits * 100.0) : 0.0;
+            string symName = config.Symbols.FirstOrDefault(s => s.Id == symId)?.Name ?? $"Symbol {symId}";
+
+            Console.WriteLine($"    Symbol {symId,2} ({symName,-16}): Landed Spins = {hits,6:N0} ({pctOfColossalSpins,6:P2} of colossal spins) | RTP = {symRtp,8:P4} | Avg Win = {avgWin,6:F2}x bet");
         }
 
         Console.WriteLine("\n[Bonus 4]");
