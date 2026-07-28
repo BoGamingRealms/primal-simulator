@@ -370,7 +370,7 @@ try
 
     // SECTION 1: Overall top-level game stats
     stats["Simulation Date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-    stats["Game Name"] = "Fire Primal Elepant 95";
+    stats["Game Name"] = "Fire Primal Elephant 95";
     stats["Simulation Mode"] = modeName;
     stats["Total Spins Run"] = totalSpins.ToString("N0");
     stats["Total Return to Player (RTP)"] = $"{totalRtp:P2}";
