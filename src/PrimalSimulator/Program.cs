@@ -153,6 +153,15 @@ try
     int[] apexSpinsTriggersByPower = new int[config.ApexSpinsTopAwardMultipliers.Length];
     long[] apexSpinsWinByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
     long[] apexSpinsPlayedByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
+
+    // Detailed stats for Colossal Spins (Bonus 3)
+    int totalColossalSpinsTriggers = 0;
+    long totalColossalSpinsWin = 0;
+    long totalColossalSpinsPlayed = 0;
+    int totalColossalSpinsMinWinApplied = 0;
+    int[] colossalSpinsTriggersByPower = new int[config.ColossalSpinsCounts.Length];
+    long[] colossalSpinsWinByPower = new long[config.ColossalSpinsCounts.Length];
+    long[] colossalSpinsPlayedByPower = new long[config.ColossalSpinsCounts.Length];
     
     // Detailed collect feature stats
     int collectTriggersWith1Collector = 0;
@@ -319,6 +328,22 @@ try
                         apexSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
                     }
                 }
+                else if (p == 2)
+                {
+                    totalColossalSpinsTriggers++;
+                    totalColossalSpinsWin += potBonus.Win;
+                    totalColossalSpinsPlayed += potBonus.SpinsPlayed;
+                    if (potBonus.MinWinApplied)
+                    {
+                        totalColossalSpinsMinWinApplied++;
+                    }
+                    if (potBonus.Power >= 0 && potBonus.Power < colossalSpinsTriggersByPower.Length)
+                    {
+                        colossalSpinsTriggersByPower[potBonus.Power]++;
+                        colossalSpinsWinByPower[potBonus.Power] += potBonus.Win;
+                        colossalSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                }
             }
         }
         else
@@ -342,6 +367,12 @@ try
                     totalApexSpinsWin += potBonus.Win;
                     totalApexSpinsPlayed += potBonus.SpinsPlayed;
                 }
+                else if (potBonus.PotIndex == 2)
+                {
+                    totalColossalSpinsTriggers++;
+                    totalColossalSpinsWin += potBonus.Win;
+                    totalColossalSpinsPlayed += potBonus.SpinsPlayed;
+                }
             }
         }
     }
@@ -362,8 +393,14 @@ try
     double avgApexSpinsWinMultiplier = totalApexSpinsTriggers > 0 ? (double)totalApexSpinsWin / (totalApexSpinsTriggers * 100.0) : 0.0;
     double avgApexSpinsSpinsPlayed = totalApexSpinsTriggers > 0 ? (double)totalApexSpinsPlayed / totalApexSpinsTriggers : 0.0;
 
+    double colossalSpinsRtp = (double)totalColossalSpinsWin / (totalSpins * 100.0);
+    double colossalSpinsTriggerChance = (double)totalColossalSpinsTriggers / totalSpins;
+    string colossalSpinsTriggerFreqStr = colossalSpinsTriggerChance > 0 ? $"1 in {1.0 / colossalSpinsTriggerChance:F1} spins ({colossalSpinsTriggerChance:P4})" : "Never";
+    double avgColossalSpinsWinMultiplier = totalColossalSpinsTriggers > 0 ? (double)totalColossalSpinsWin / (totalColossalSpinsTriggers * 100.0) : 0.0;
+    double avgColossalSpinsSpinsPlayed = totalColossalSpinsTriggers > 0 ? (double)totalColossalSpinsPlayed / totalColossalSpinsTriggers : 0.0;
+
     double jackpotBonusRtp = (double)totalJackpotBonusWin / (totalSpins * 100.0);
-    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin) / (totalSpins * 100.0);
+    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin - totalColossalSpinsWin) / (totalSpins * 100.0);
     
     // Construct order-preserving stats dictionary following the requested sections
     var stats = new Dictionary<string, string>();
@@ -379,7 +416,7 @@ try
     stats["Jackpot Bonus RTP"] = $"{jackpotBonusRtp:P2}";
     stats["Lock & Slingo (Bonus 1) RTP"] = $"{lockSlingoRtp:P2}";
     stats["Apex Spins (Bonus 2) RTP"] = $"{apexSpinsRtp:P2}";
-    stats["Bonus 3 RTP"] = "0.00%";
+    stats["Colossal Spins (Bonus 3) RTP"] = $"{colossalSpinsRtp:P2}";
     stats["Bonus 4 RTP"] = "0.00%";
     stats["Hit Frequency"] = $"{hitFreq:P2}";
     stats["Stage 6 Power Max Triggers"] = totalPowerUpTriggers.ToString("N0");
@@ -496,16 +533,32 @@ try
             stats[$"Bonus 2 Power {L} Avg Spins Played"] = $"{avgSpins:F2} spins";
         }
 
-        // SECTION 6: Bonus 3
+        // SECTION 6: Bonus 3 (Colossal Spins)
         double landingChance3 = (double)spinsWithPotTrigger[2] / totalSpins;
         string landingFreqStr3 = landingChance3 > 0 ? $"1 in {1.0 / landingChance3:F1} spins ({landingChance3:P2})" : "Never";
-        double triggerChance3 = (double)totalPotTriggers[2] / totalSpins;
-        string triggerFreqStr3 = triggerChance3 > 0 ? $"1 in {1.0 / triggerChance3:F1} spins ({triggerChance3:P4})" : "Never";
         double avgPower3 = totalPotTriggers[2] > 0 ? (double)totalPotTriggerPowers[2] / totalPotTriggers[2] : 0.0;
+        double colossalSpinsMinWinPercent = totalColossalSpinsTriggers > 0 ? (double)totalColossalSpinsMinWinApplied / totalColossalSpinsTriggers : 0.0;
 
         stats["Bonus 3 Landing Pot Trigger Freq"] = landingFreqStr3;
-        stats["Bonus 3 Trigger Frequency"] = triggerFreqStr3;
+        stats["Bonus 3 Trigger Frequency"] = colossalSpinsTriggerFreqStr;
         stats["Bonus 3 Average Power on Trigger"] = $"{avgPower3:F2}";
+        stats["Bonus 3 Average Win"] = $"{avgColossalSpinsWinMultiplier:F2}x bet";
+        stats["Bonus 3 Average Spins Awarded"] = $"{avgColossalSpinsSpinsPlayed:F2} spins";
+        stats["Bonus 3 Guaranteed Minimum Applied %"] = $"{colossalSpinsMinWinPercent:P2}";
+
+        for (int L = 0; L < colossalSpinsTriggersByPower.Length; L++)
+        {
+            int hits = colossalSpinsTriggersByPower[L];
+            double pctOfTriggers = totalColossalSpinsTriggers > 0 ? (double)hits / totalColossalSpinsTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            double avgWin = hits > 0 ? (double)colossalSpinsWinByPower[L] / (hits * 100.0) : 0.0;
+            double avgSpins = hits > 0 ? (double)colossalSpinsPlayedByPower[L] / hits : 0.0;
+
+            stats[$"Bonus 3 Power {L} ({config.ColossalSpinsCounts[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
+            stats[$"Bonus 3 Power {L} Avg Win"] = $"{avgWin:F2}x bet";
+            stats[$"Bonus 3 Power {L} Avg Spins"] = $"{avgSpins:F2} spins";
+        }
 
         // SECTION 7: Bonus 4
         double landingChance4 = (double)spinsWithPotTrigger[3] / totalSpins;
@@ -526,7 +579,7 @@ try
         Console.WriteLine($"    - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
         Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
         Console.WriteLine($"    - Apex Spins (Bonus 2) RTP: {apexSpinsRtp:P2}");
-        Console.WriteLine($"    - Bonus 3 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Colossal Spins (Bonus 3) RTP: {colossalSpinsRtp:P2}");
         Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
         
@@ -615,11 +668,26 @@ try
             Console.WriteLine($"    Power Level {L,2} (Top Award {config.ApexSpinsTopAwardMultipliers[L],2}x): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
         }
 
-        Console.WriteLine("\n[Bonus 3]");
+        Console.WriteLine("\n[Bonus 3 - Colossal Spins]");
+        Console.WriteLine($"  - Colossal Spins Total RTP: {colossalSpinsRtp:P2}");
         Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr3}");
-        Console.WriteLine($"  - Trigger Frequency: {triggerFreqStr3}");
+        Console.WriteLine($"  - Trigger Frequency: {colossalSpinsTriggerFreqStr}");
         Console.WriteLine($"  - Average Power on Trigger: {avgPower3:F2}");
-        Console.WriteLine("  - Bonus 3 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"  - Average Win: {avgColossalSpinsWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Spins Awarded: {avgColossalSpinsSpinsPlayed:F2} spins");
+        Console.WriteLine($"  - Guaranteed Minimum Win Applied %: {colossalSpinsMinWinPercent:P2}");
+        Console.WriteLine("  - Hit Distribution & Stats by Power Level:");
+        for (int L = 0; L < colossalSpinsTriggersByPower.Length; L++)
+        {
+            int hits = colossalSpinsTriggersByPower[L];
+            double pctOfTriggers = totalColossalSpinsTriggers > 0 ? (double)hits / totalColossalSpinsTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            double avgWin = hits > 0 ? (double)colossalSpinsWinByPower[L] / (hits * 100.0) : 0.0;
+            double avgSpins = hits > 0 ? (double)colossalSpinsPlayedByPower[L] / hits : 0.0;
+
+            Console.WriteLine($"    Power Level {L,2} ({config.ColossalSpinsCounts[L],2} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
+        }
 
         Console.WriteLine("\n[Bonus 4]");
         Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr4}");
@@ -631,15 +699,15 @@ try
     }
     else
     {
-        double landingChance2 = (double)spinsWithPotTrigger[1] / totalSpins;
-        string landingFreqStr2 = landingChance2 > 0 ? $"1 in {1.0 / landingChance2:F1} spins ({landingChance2:P2})" : "Never";
-        double avgPower2 = totalPotTriggers[1] > 0 ? (double)totalPotTriggerPowers[1] / totalPotTriggers[1] : 0.0;
+        double landingChance3 = (double)spinsWithPotTrigger[2] / totalSpins;
+        string landingFreqStr3 = landingChance3 > 0 ? $"1 in {1.0 / landingChance3:F1} spins ({landingChance3:P2})" : "Never";
+        double avgPower3 = totalPotTriggers[2] > 0 ? (double)totalPotTriggerPowers[2] / totalPotTriggers[2] : 0.0;
 
-        stats["Bonus 2 Landing Pot Trigger Freq"] = landingFreqStr2;
-        stats["Bonus 2 Trigger Frequency"] = apexSpinsTriggerFreqStr;
-        stats["Bonus 2 Average Power on Trigger"] = $"{avgPower2:F2}";
-        stats["Bonus 2 Average Win"] = $"{avgApexSpinsWinMultiplier:F2}x bet";
-        stats["Bonus 2 Average Spins Played"] = $"{avgApexSpinsSpinsPlayed:F2} spins";
+        stats["Bonus 3 Landing Pot Trigger Freq"] = landingFreqStr3;
+        stats["Bonus 3 Trigger Frequency"] = colossalSpinsTriggerFreqStr;
+        stats["Bonus 3 Average Power on Trigger"] = $"{avgPower3:F2}";
+        stats["Bonus 3 Average Win"] = $"{avgColossalSpinsWinMultiplier:F2}x bet";
+        stats["Bonus 3 Average Spins Awarded"] = $"{avgColossalSpinsSpinsPlayed:F2} spins";
 
         Console.WriteLine($"Simulation complete!");
         Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
@@ -648,7 +716,7 @@ try
         Console.WriteLine($"    - Jackpot Bonus RTP: {jackpotBonusRtp:P2}");
         Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
         Console.WriteLine($"    - Apex Spins (Bonus 2) RTP: {apexSpinsRtp:P2}");
-        Console.WriteLine($"    - Bonus 3 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Colossal Spins (Bonus 3) RTP: {colossalSpinsRtp:P2}");
         Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
         
@@ -674,8 +742,11 @@ try
         Console.WriteLine($"  - Average Win: {avgApexSpinsWinMultiplier:F2}x bet");
         Console.WriteLine($"  - Average Spins Played: {avgApexSpinsSpinsPlayed:F2} spins");
 
-        Console.WriteLine("\n[Bonus 3]");
-        Console.WriteLine("  - Bonus 3 RTP: 0.00% (Placeholder)");
+        Console.WriteLine("\n[Bonus 3 - Colossal Spins]");
+        Console.WriteLine($"  - Colossal Spins Trigger Freq: {colossalSpinsTriggerFreqStr}");
+        Console.WriteLine($"  - Colossal Spins Total RTP: {colossalSpinsRtp:P2}");
+        Console.WriteLine($"  - Average Win: {avgColossalSpinsWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Spins Awarded: {avgColossalSpinsSpinsPlayed:F2} spins");
 
         Console.WriteLine("\n[Bonus 4]");
         Console.WriteLine("  - Bonus 4 RTP: 0.00% (Placeholder)");

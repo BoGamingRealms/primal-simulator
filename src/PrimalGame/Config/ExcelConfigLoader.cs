@@ -518,6 +518,90 @@ public class ExcelConfigLoader
             config.ApexSpinsReelsets[reelsetName] = new ReelSet(reels);
         }
 
+        // Load Colossal Spins (Bonus 3) Spins Counts from Row 205 (index 204)
+        if (dataTable.Rows.Count > 204)
+        {
+            var row = dataTable.Rows[204];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ColossalSpinsCounts = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Colossal Spins Trigger Weights from Row 206 (index 205)
+        if (dataTable.Rows.Count > 205)
+        {
+            var row = dataTable.Rows[205];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ColossalSpinsTriggerWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Colossal Spins Bonus Minimums from Row 207 (index 206)
+        if (dataTable.Rows.Count > 206)
+        {
+            var row = dataTable.Rows[206];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ColossalSpinsBonusMinimums = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Colossal Spins Reelset Weights from Row 208 (index 207)
+        if (dataTable.Rows.Count > 207)
+        {
+            var row = dataTable.Rows[207];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.ColossalSpinsReelsetWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Colossal Spins Reelsets starting from Row 209 (index 208)
+        int colossalStartRowIndex = 208;
+        for (int setIdx = 0; setIdx < 7; setIdx++)
+        {
+            int rStart = colossalStartRowIndex + (setIdx * 5);
+            if (rStart + 4 >= dataTable.Rows.Count) break;
+
+            var headerRow = dataTable.Rows[rStart];
+            string reelsetName = headerRow[0]?.ToString()?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(reelsetName))
+            {
+                reelsetName = $"Reelset{setIdx}";
+            }
+
+            int[][] reels = new int[5][];
+            for (int r = 0; r < 5; r++)
+            {
+                var rRow = dataTable.Rows[rStart + r];
+                var cellB = rRow[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(cellB))
+                {
+                    reels[r] = cellB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+
+            config.ColossalSpinsReelsets[reelsetName] = new ReelSet(reels);
+        }
+
         config.PrepareForSimulation();
 
         return config;

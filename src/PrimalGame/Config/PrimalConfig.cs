@@ -64,6 +64,13 @@ public class PrimalConfig
     public int[] ApexSpinsReelsetWeights { get; set; } = Array.Empty<int>();
     public Dictionary<string, ReelSet> ApexSpinsReelsets { get; set; } = new();
 
+    // Colossal Spins (Bonus 3) configuration
+    public int[] ColossalSpinsCounts { get; set; } = Array.Empty<int>();
+    public int[] ColossalSpinsTriggerWeights { get; set; } = Array.Empty<int>();
+    public double[] ColossalSpinsBonusMinimums { get; set; } = Array.Empty<double>();
+    public int[] ColossalSpinsReelsetWeights { get; set; } = Array.Empty<int>();
+    public Dictionary<string, ReelSet> ColossalSpinsReelsets { get; set; } = new();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();

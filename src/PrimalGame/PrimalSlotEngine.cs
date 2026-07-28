@@ -63,6 +63,10 @@ namespace PrimalGame
                 {
                     _potPowers[1] = Math.Max(0, _config.ApexSpinsTopAwardMultipliers.Length - 1);
                 }
+                else if (p == 2)
+                {
+                    _potPowers[2] = Math.Max(0, _config.ColossalSpinsCounts.Length - 1);
+                }
                 else
                 {
                     _potPowers[p] = _config.MaxBonusPower;
@@ -406,9 +410,42 @@ namespace PrimalGame
                             _potPowers[1] = Math.Min(maxPower, currentPower + count);
                         }
                     }
+                    else if (p == 2)
+                    {
+                        // Pot 3: Colossal Spins Trigger
+                        int maxPower = _config.ColossalSpinsCounts.Length - 1;
+                        int currentPower = Math.Min(maxPower, _potPowers[2]);
+                        int chanceWeight = _config.ColossalSpinsTriggerWeights[currentPower];
+                        if (rng.Next(chanceWeight) < count)
+                        {
+                            // Triggered! Power increases by N - 1
+                            int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
+                            long bonusWin = RunColossalSpinsBonus(triggeredPower, rng, out int spinsPlayed, out bool minWinApplied);
+
+                            spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
+                            {
+                                PotIndex = 2,
+                                BonusName = "Colossal Spins",
+                                Power = triggeredPower,
+                                Win = bonusWin,
+                                SpinsPlayed = spinsPlayed,
+                                MinWinApplied = minWinApplied
+                            });
+
+                            spinResult.FeatureWin += bonusWin;
+                            spinResult.TotalWin += bonusWin;
+
+                            _potPowers[2] = 0; // reset
+                        }
+                        else
+                        {
+                            // Not triggered, increase power by count
+                            _potPowers[2] = Math.Min(maxPower, currentPower + count);
+                        }
+                    }
                     else
                     {
-                        // Other pots: placeholder trigger
+                        // Other pots (Pot 4): placeholder trigger
                         int chanceWeight = _config.PotTriggerChanceWeights[p];
                         if (rng.Next(chanceWeight) < count)
                         {
@@ -504,6 +541,52 @@ namespace PrimalGame
             if (_stageIndex >= 5 && _config.ApexSpinsBonusMinimums.Length > powerLevel)
             {
                 double minWinMultiplier = _config.ApexSpinsBonusMinimums[powerLevel];
+                long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
+                if (totalBonusWinInCents < minWinInCents)
+                {
+                    totalBonusWinInCents = minWinInCents;
+                    minWinApplied = true;
+                }
+            }
+
+            return totalBonusWinInCents;
+        }
+
+        private long RunColossalSpinsBonus(int powerLevel, IRng rng, out int spinsPlayed, out bool minWinApplied)
+        {
+            int totalSpins = _config.ColossalSpinsCounts.Length > powerLevel ? _config.ColossalSpinsCounts[powerLevel] : 5;
+            spinsPlayed = totalSpins;
+            long totalBonusWinInCents = 0;
+
+            for (int spin = 0; spin < totalSpins; spin++)
+            {
+                int chosenIdx = ChooseWeightedIndex(_config.ColossalSpinsReelsetWeights, rng);
+                string reelsetName = $"Reelset{chosenIdx}";
+
+                if (!_config.ColossalSpinsReelsets.TryGetValue(reelsetName, out var reelset))
+                {
+                    reelset = _config.ColossalSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
+                }
+
+                int[][] screenSymbols = new int[5][];
+                for (int r = 0; r < 5; r++)
+                {
+                    screenSymbols[r] = new int[3];
+                    var strip = reelset.Reels[r];
+                    int stopIndex = rng.Next(strip.Length);
+                    screenSymbols[r][0] = reelset.GetSymbolAt(r, stopIndex, 0);
+                    screenSymbols[r][1] = reelset.GetSymbolAt(r, stopIndex, 1);
+                    screenSymbols[r][2] = reelset.GetSymbolAt(r, stopIndex, 2);
+                }
+
+                totalBonusWinInCents += EvaluateGridLineWins(screenSymbols);
+            }
+
+            // Guaranteed Bonus Minimum if stage >= 5
+            minWinApplied = false;
+            if (_stageIndex >= 5 && _config.ColossalSpinsBonusMinimums.Length > powerLevel)
+            {
+                double minWinMultiplier = _config.ColossalSpinsBonusMinimums[powerLevel];
                 long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
                 if (totalBonusWinInCents < minWinInCents)
                 {
