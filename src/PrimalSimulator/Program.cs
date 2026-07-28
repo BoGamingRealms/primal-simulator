@@ -9,8 +9,8 @@ using PrimalGame;
 using SlotFramework.Utilities;
 using SlotFramework.Models;
 
-string defaultPath = "FirePrimalsElephant95.xlsx";
-string resultsPath = "FirePrimalsElephant95_Results.xlsx";
+string defaultPath = "FirePrimalElephant95.xlsx";
+string resultsPath = "FirePrimalElephant95_Results.xlsx";
 
 bool trackFullStats = true;
 string filePath = defaultPath;
@@ -370,7 +370,7 @@ try
 
     // SECTION 1: Overall top-level game stats
     stats["Simulation Date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-    stats["Game Name"] = "4 Fire Primals";
+    stats["Game Name"] = "Fire Primal Elepant 95";
     stats["Simulation Mode"] = modeName;
     stats["Total Spins Run"] = totalSpins.ToString("N0");
     stats["Total Return to Player (RTP)"] = $"{totalRtp:P2}";
