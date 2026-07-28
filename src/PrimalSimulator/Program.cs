@@ -520,7 +520,8 @@ try
             double pctOfTriggers = totalLockSlingoTriggers > 0 ? (double)hits / totalLockSlingoTriggers : 0.0;
             double hitRate = (double)hits / totalSpins;
             string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
-            stats[$"Bonus 1 Power {L} ({config.LockSlingoSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
+            stats[$"Bonus 1 Power {L} ({config.LockSlingoSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers)";
+            stats[$"Bonus 1 Power {L} Trigger Chance (% of spins)"] = hitRate > 0 ? $"{hitRate:P4} ({freqStr})" : "Never";
         }
 
         // SECTION 5: Bonus 2 (Apex Spins)
@@ -545,7 +546,8 @@ try
             double avgWin = hits > 0 ? (double)apexSpinsWinByPower[L] / (hits * 100.0) : 0.0;
             double avgSpins = hits > 0 ? (double)apexSpinsPlayedByPower[L] / hits : 0.0;
 
-            stats[$"Bonus 2 Power {L} (Top Award {config.ApexSpinsTopAwardMultipliers[L]}x) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
+            stats[$"Bonus 2 Power {L} (Top Award {config.ApexSpinsTopAwardMultipliers[L]}x) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers)";
+            stats[$"Bonus 2 Power {L} Trigger Chance (% of spins)"] = hitRate > 0 ? $"{hitRate:P4} ({freqStr})" : "Never";
             stats[$"Bonus 2 Power {L} Avg Win"] = $"{avgWin:F2}x bet";
             stats[$"Bonus 2 Power {L} Avg Spins Played"] = $"{avgSpins:F2} spins";
         }
@@ -572,7 +574,8 @@ try
             double avgWin = hits > 0 ? (double)colossalSpinsWinByPower[L] / (hits * 100.0) : 0.0;
             double avgSpins = hits > 0 ? (double)colossalSpinsPlayedByPower[L] / hits : 0.0;
 
-            stats[$"Bonus 3 Power {L} ({config.ColossalSpinsCounts[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers, {freqStr})";
+            stats[$"Bonus 3 Power {L} ({config.ColossalSpinsCounts[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers)";
+            stats[$"Bonus 3 Power {L} Trigger Chance (% of spins)"] = hitRate > 0 ? $"{hitRate:P4} ({freqStr})" : "Never";
             stats[$"Bonus 3 Power {L} Avg Win"] = $"{avgWin:F2}x bet";
             stats[$"Bonus 3 Power {L} Avg Spins"] = $"{avgSpins:F2} spins";
         }
