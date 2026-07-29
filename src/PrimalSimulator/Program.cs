@@ -723,18 +723,6 @@ try
 
             Console.WriteLine($"    Power Level {L,2} ({config.ColossalSpinsCounts[L],2} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
         }
-        Console.WriteLine("  - Colossal Symbols Breakdown:");
-        foreach (var symId in sortedColossalSyms)
-        {
-            long hits = colossalSymbolHits[symId];
-            long wins = colossalSymbolWins[symId];
-            double symRtp = (double)wins / (totalSpins * 100.0);
-            double pctOfColossalSpins = totalColossalSpinsPlayed > 0 ? (double)hits / totalColossalSpinsPlayed : 0.0;
-            double avgWin = hits > 0 ? (double)wins / (hits * 100.0) : 0.0;
-            string symName = config.Symbols.FirstOrDefault(s => s.Id == symId)?.Name ?? $"Symbol {symId}";
-
-            Console.WriteLine($"    Symbol {symId,2} ({symName,-16}): Landed Spins = {hits,6:N0} ({pctOfColossalSpins,6:P2} of colossal spins) | RTP = {symRtp,8:P4} | Avg Win = {avgWin,6:F2}x bet");
-        }
 
         Console.WriteLine("\n[Bonus 4]");
         Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr4}");
