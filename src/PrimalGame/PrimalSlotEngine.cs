@@ -252,15 +252,15 @@ namespace PrimalGame
             if (triggerCount > 0)
             {
                 // Select cash values and weights:
-                // Col B (Special) is used on Reelsets 8, 9, 10 when there are Collector symbols on Reel 0 or 4
+                // Col B (Special) is used on Reelsets 8, 9, 10
                 // Col C (Default) is used for all other reelsets
                 bool isSpecialReelset = (reelsetIndex == 8 || reelsetIndex == 9 || reelsetIndex == 10);
 
-                double[] cashValues = (isSpecialReelset && totalCollectors > 0)
+                double[] cashValues = isSpecialReelset
                     ? (_config.FireCoreCashValuesSpecial.Length > 0 ? _config.FireCoreCashValuesSpecial : _config.FireCoreCashValues)
                     : (_config.FireCoreCashValuesDefault.Length > 0 ? _config.FireCoreCashValuesDefault : _config.FireCoreCashValues);
 
-                int[] cashWeights = (isSpecialReelset && totalCollectors > 0)
+                int[] cashWeights = isSpecialReelset
                     ? (_config.FireCoreCashWeightsSpecial.Length > 0 ? _config.FireCoreCashWeightsSpecial : _config.FireCoreCashWeights)
                     : (_config.FireCoreCashWeightsDefault.Length > 0 ? _config.FireCoreCashWeightsDefault : _config.FireCoreCashWeights);
 
