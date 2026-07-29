@@ -113,7 +113,7 @@ namespace PrimalGame
             EvaluateLineWins(spinResult);
 
             // 5. Evaluate Jackpot Trigger Collections
-            EvaluateCollections(spinResult, rng);
+            EvaluateCollections(spinResult, rng, chosenReelsetIndex);
 
             // 6. Evaluate Pot triggers & progress
             EvaluatePots(spinResult, rng);
@@ -213,7 +213,7 @@ namespace PrimalGame
             }
         }
 
-        private void EvaluateCollections(SpinResult spinResult, IRng rng)
+        private void EvaluateCollections(SpinResult spinResult, IRng rng, int reelsetIndex = 0)
         {
             // 1. Count collectors on Reel 0 and Reel 4
             int collectorsReel0 = 0;
@@ -251,14 +251,27 @@ namespace PrimalGame
 
             if (triggerCount > 0)
             {
+                // Select cash values and weights:
+                // Col B (Special) is used on Reelsets 8, 9, 10 when there are Collector symbols on Reel 0 or 4
+                // Col C (Default) is used for all other reelsets
+                bool isSpecialReelset = (reelsetIndex == 8 || reelsetIndex == 9 || reelsetIndex == 10);
+
+                double[] cashValues = (isSpecialReelset && totalCollectors > 0)
+                    ? (_config.FireCoreCashValuesSpecial.Length > 0 ? _config.FireCoreCashValuesSpecial : _config.FireCoreCashValues)
+                    : (_config.FireCoreCashValuesDefault.Length > 0 ? _config.FireCoreCashValuesDefault : _config.FireCoreCashValues);
+
+                int[] cashWeights = (isSpecialReelset && totalCollectors > 0)
+                    ? (_config.FireCoreCashWeightsSpecial.Length > 0 ? _config.FireCoreCashWeightsSpecial : _config.FireCoreCashWeights)
+                    : (_config.FireCoreCashWeightsDefault.Length > 0 ? _config.FireCoreCashWeightsDefault : _config.FireCoreCashWeights);
+
                 // Draw a cash value for each landed trigger
                 double sumMultipliers = 0.0;
                 for (int i = 0; i < triggerCount; i++)
                 {
-                    if (_config.FireCoreCashValues.Length > 0 && _config.FireCoreCashWeights.Length > 0)
+                    if (cashValues.Length > 0 && cashWeights.Length > 0)
                     {
-                        int chosenValIndex = ChooseWeightedIndex(_config.FireCoreCashWeights, rng);
-                        sumMultipliers += _config.FireCoreCashValues[chosenValIndex];
+                        int chosenValIndex = ChooseWeightedIndex(cashWeights, rng);
+                        sumMultipliers += cashValues[chosenValIndex];
                     }
                 }
 

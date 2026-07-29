@@ -32,8 +32,22 @@ public class PrimalConfig
     public int[] StageSpinsToNext { get; set; } = Array.Empty<int>();
 
     // Fire Core cash value feature configuration
-    public double[] FireCoreCashValues { get; set; } = Array.Empty<double>();
-    public int[] FireCoreCashWeights { get; set; } = Array.Empty<int>();
+    public double[] FireCoreCashValuesSpecial { get; set; } = Array.Empty<double>(); // Col B (for Reelsets 8, 9, 10 when Collector is present)
+    public int[] FireCoreCashWeightsSpecial { get; set; } = Array.Empty<int>();     // Col B (for Reelsets 8, 9, 10 when Collector is present)
+    public double[] FireCoreCashValuesDefault { get; set; } = Array.Empty<double>(); // Col C (for all other base game reelsets)
+    public int[] FireCoreCashWeightsDefault { get; set; } = Array.Empty<int>();     // Col C (for all other base game reelsets)
+
+    public double[] FireCoreCashValues
+    {
+        get => FireCoreCashValuesDefault.Length > 0 ? FireCoreCashValuesDefault : FireCoreCashValuesSpecial;
+        set => FireCoreCashValuesSpecial = value;
+    }
+    public int[] FireCoreCashWeights
+    {
+        get => FireCoreCashWeightsDefault.Length > 0 ? FireCoreCashWeightsDefault : FireCoreCashWeightsSpecial;
+        set => FireCoreCashWeightsSpecial = value;
+    }
+
     public int FireCoreSymbolId { get; set; } = 14;
     public int CollectorSymbolId { get; set; } = 9;
 

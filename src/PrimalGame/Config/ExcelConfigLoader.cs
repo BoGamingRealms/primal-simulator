@@ -209,49 +209,63 @@ public class ExcelConfigLoader
         }
         config.Paylines = paylinesList.ToArray();
 
-        // Load Fire Core values from Row 147 (index 146)
+        // Load Fire Core values from Row 147 (index 146): Col B (Special for Reelsets 8,9,10), Col C (Default for other reelsets)
         if (dataTable.Rows.Count > 146)
         {
             var row147 = dataTable.Rows[146];
+            // Col B: Special values for Reelsets 8, 9, 10
             if (row147.ItemArray.Length > 1 && row147[1] != DBNull.Value)
             {
                 var valuesStr = row147[1]?.ToString();
                 if (!string.IsNullOrWhiteSpace(valuesStr))
                 {
-                    string[] parts = valuesStr.Split(',');
-                    var valuesList = new List<double>();
-                    foreach (var part in parts)
-                    {
-                        if (double.TryParse(part.Trim(), out double val))
-                        {
-                            valuesList.Add(val);
-                        }
-                    }
-                    config.FireCoreCashValues = valuesList.ToArray();
+                    var valuesList = valuesStr.Split(',').Select(p => double.TryParse(p.Trim(), out double val) ? val : (double?)null).Where(v => v.HasValue).Select(v => v!.Value).ToArray();
+                    config.FireCoreCashValuesSpecial = valuesList;
                 }
+            }
+            // Col C: Default values for all other base game reelsets
+            if (row147.ItemArray.Length > 2 && row147[2] != DBNull.Value)
+            {
+                var valuesStrC = row147[2]?.ToString();
+                if (!string.IsNullOrWhiteSpace(valuesStrC))
+                {
+                    var valuesListC = valuesStrC.Split(',').Select(p => double.TryParse(p.Trim(), out double val) ? val : (double?)null).Where(v => v.HasValue).Select(v => v!.Value).ToArray();
+                    config.FireCoreCashValuesDefault = valuesListC;
+                }
+            }
+            if (config.FireCoreCashValuesDefault.Length == 0)
+            {
+                config.FireCoreCashValuesDefault = config.FireCoreCashValuesSpecial;
             }
         }
 
-        // Load Fire Core weights from Row 148 (index 147)
+        // Load Fire Core weights from Row 148 (index 147): Col B (Special for Reelsets 8,9,10), Col C (Default for other reelsets)
         if (dataTable.Rows.Count > 147)
         {
             var row148 = dataTable.Rows[147];
+            // Col B: Special weights for Reelsets 8, 9, 10
             if (row148.ItemArray.Length > 1 && row148[1] != DBNull.Value)
             {
                 var weightsStr = row148[1]?.ToString();
                 if (!string.IsNullOrWhiteSpace(weightsStr))
                 {
-                    string[] parts = weightsStr.Split(',');
-                    var weightsList = new List<int>();
-                    foreach (var part in parts)
-                    {
-                        if (int.TryParse(part.Trim(), out int val))
-                        {
-                            weightsList.Add(val);
-                        }
-                    }
-                    config.FireCoreCashWeights = weightsList.ToArray();
+                    var weightsList = weightsStr.Split(',').Select(p => int.TryParse(p.Trim(), out int val) ? val : (int?)null).Where(v => v.HasValue).Select(v => v!.Value).ToArray();
+                    config.FireCoreCashWeightsSpecial = weightsList;
                 }
+            }
+            // Col C: Default weights for all other base game reelsets
+            if (row148.ItemArray.Length > 2 && row148[2] != DBNull.Value)
+            {
+                var weightsStrC = row148[2]?.ToString();
+                if (!string.IsNullOrWhiteSpace(weightsStrC))
+                {
+                    var weightsListC = weightsStrC.Split(',').Select(p => int.TryParse(p.Trim(), out int val) ? val : (int?)null).Where(v => v.HasValue).Select(v => v!.Value).ToArray();
+                    config.FireCoreCashWeightsDefault = weightsListC;
+                }
+            }
+            if (config.FireCoreCashWeightsDefault.Length == 0)
+            {
+                config.FireCoreCashWeightsDefault = config.FireCoreCashWeightsSpecial;
             }
         }
 
