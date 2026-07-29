@@ -186,7 +186,7 @@ public class ReelstripGenerator
 
     private bool IsHighPayOrSpecial(int id)
     {
-        return id >= 5; // H3(5), H2(6), H1(7), Wild(8), Specials(9-13), Jackpot(14) are high/special
+        return id >= 4; // H4(4), H3(5), H2(6), H1(7), Wild(8), Specials(9-13), Jackpot(14) are high/special
     }
 
     private bool IsValidReel(List<int> flatReel)

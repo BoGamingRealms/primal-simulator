@@ -168,7 +168,7 @@ public class ColossalReelstripGenerator
 
     private bool IsSpecialOrHighPay(int id)
     {
-        return id >= 5; // Symbols 5-7 (H3-H1), 8 (Wild), 9-13 (Pots/Specials), 14 (Fire Core)
+        return id >= 4; // Symbols 4-7 (H4-H1), 8 (Wild), 9-13 (Pots/Specials), 14 (Fire Core)
     }
 
     private List<int> GenerateStandardReel(Dictionary<int, int> reelDist)
