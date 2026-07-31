@@ -778,6 +778,48 @@ public class ExcelConfigLoader
             }
         }
 
+        // Load Stampede Spin configuration starting from Row 263 (index 262)
+        if (dataTable.Rows.Count > 262)
+        {
+            var row = dataTable.Rows[262];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.StampedePotCounts = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Stampede Pot Count Weights from Row 264 (index 263)
+        if (dataTable.Rows.Count > 263)
+        {
+            var row = dataTable.Rows[263];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.StampedePotCountWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Stampede Pot Type Weights from Row 265 (index 264)
+        if (dataTable.Rows.Count > 264)
+        {
+            var row = dataTable.Rows[264];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.StampedePotTypeWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
         config.PrepareForSimulation();
 
         return config;

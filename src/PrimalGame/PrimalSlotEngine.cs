@@ -109,6 +109,30 @@ namespace PrimalGame
                 spinResult.ScreenSymbols[r][2] = reelset.GetSymbolAt(r, stopIndex, 2);
             }
 
+            // 3b. Stampede Spin check (Reelsets 11, 12, 13)
+            if (chosenReelsetIndex == 11 || chosenReelsetIndex == 12 || chosenReelsetIndex == 13)
+            {
+                spinResult.IsStampedeSpin = true;
+
+                if (_config.StampedePotCountWeights.Length > 0 && _config.StampedePotCounts.Length > 0)
+                {
+                    int kIdx = ChooseWeightedIndex(_config.StampedePotCountWeights, rng);
+                    int potsToAdd = _config.StampedePotCounts[Math.Min(kIdx, _config.StampedePotCounts.Length - 1)];
+                    spinResult.StampedeAddedPotCount = potsToAdd;
+
+                    List<int> positions = SelectUniquePositions(15, potsToAdd, rng);
+                    foreach (int pos in positions)
+                    {
+                        int r = pos / 3;
+                        int row = pos % 3;
+
+                        int potTypeIdx = ChooseWeightedIndex(_config.StampedePotTypeWeights, rng);
+                        int symbolId = 10 + Math.Clamp(potTypeIdx, 0, 3);
+                        spinResult.ScreenSymbols[r][row] = symbolId;
+                    }
+                }
+            }
+
             // 4. Evaluate Payline Wins
             EvaluateLineWins(spinResult);
 

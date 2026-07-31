@@ -176,6 +176,11 @@ try
     long[] primalZonePlayedByPower = new long[config.PrimalZoneSpins.Length];
     int[] primalZoneStageHits = new int[4];
 
+    // Detailed stats for Stampede Spin
+    int totalStampedeSpins = 0;
+    long totalStampedeWin = 0;
+    long totalStampedePotsAdded = 0;
+
     // Colossal Symbol Detailed Stats Breakdown
     var colossalSymbolHits = new Dictionary<int, long>();
     var colossalSymbolWins = new Dictionary<int, long>();
@@ -207,6 +212,13 @@ try
         totalFeatureWin += spinResult.FeatureWin;
         totalLineWin += (spinResult.TotalWin - spinResult.FeatureWin);
         
+        if (spinResult.IsStampedeSpin)
+        {
+            totalStampedeSpins++;
+            totalStampedeWin += spinResult.TotalWin;
+            totalStampedePotsAdded += spinResult.StampedeAddedPotCount;
+        }
+
         if (spinResult.TotalWin > 0)
         {
             winSpins++;
@@ -810,6 +822,22 @@ try
 
             Console.WriteLine($"    Power Level {L,2} ({config.PrimalZoneSpins[L],2} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
         }
+
+        // SECTION 8: Stampede Spin Feature
+        double stampedeSpinChance = (double)totalStampedeSpins / totalSpins;
+        string stampedeFreqStr = stampedeSpinChance > 0 ? $"1 in {1.0 / stampedeSpinChance:F1} spins ({stampedeSpinChance:P2})" : "Never";
+        double avgStampedeWinMultiplier = totalStampedeSpins > 0 ? (double)totalStampedeWin / (totalStampedeSpins * 100.0) : 0.0;
+        double avgStampedePotsAdded = totalStampedeSpins > 0 ? (double)totalStampedePotsAdded / totalStampedeSpins : 0.0;
+
+        stats["Stampede Spin Trigger Freq"] = stampedeFreqStr;
+        stats["Stampede Spin Avg Win"] = $"{avgStampedeWinMultiplier:F2}x bet";
+        stats["Stampede Spin Avg Pots Added"] = $"{avgStampedePotsAdded:F2}";
+
+        Console.WriteLine("\n[Stampede Spin Feature]");
+        Console.WriteLine($"  - Stampede Spin Trigger Freq: {stampedeFreqStr}");
+        Console.WriteLine($"  - Total Stampede Spins: {totalStampedeSpins:N0}");
+        Console.WriteLine($"  - Average Pay when Stampede Spin Triggers: {avgStampedeWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Avg Pot Triggers Added per Stampede Spin: {avgStampedePotsAdded:F2}");
 
         Console.WriteLine($"\nStage 6 Power Max Triggers Count: {totalPowerUpTriggers}");
     }

@@ -98,6 +98,11 @@ public class PrimalConfig
     public List<PotLandingWeight> PrimalZoneFireCoreLandingChanceWeights { get; set; } = new();
     public List<PotLandingWeight> PrimalZoneBananaLandingChanceWeights { get; set; } = new();
 
+    // Stampede Spin configuration
+    public int[] StampedePotCounts { get; set; } = Array.Empty<int>();
+    public int[] StampedePotCountWeights { get; set; } = Array.Empty<int>();
+    public int[] StampedePotTypeWeights { get; set; } = Array.Empty<int>();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();

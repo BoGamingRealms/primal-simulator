@@ -34,6 +34,10 @@ public class SpinResult
     public double WonJackpotValue { get; set; } = 0.0;
     public long JackpotBonusWin { get; set; } = 0;
 
+    // Stampede Spin details
+    public bool IsStampedeSpin { get; set; } = false;
+    public int StampedeAddedPotCount { get; set; } = 0;
+
     // Pot Bonus details
     public List<TriggeredPotBonus> TriggeredPotBonuses { get; set; } = new();
     public int[] PotPowersBefore { get; set; } = System.Array.Empty<int>();
