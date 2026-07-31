@@ -53,4 +53,7 @@ public class TriggeredPotBonus
     public bool MinWinApplied { get; set; }
     public Dictionary<int, long> ColossalSymbolWins { get; set; } = new();
     public Dictionary<int, int> ColossalSymbolHits { get; set; } = new();
+    public int BananasCollected { get; set; }
+    public int FinalPrimalZoneStage { get; set; }
+    public int FinalPrimalZoneSize { get; set; }
 }

@@ -458,31 +458,40 @@ namespace PrimalGame
                             _potPowers[2] = Math.Min(maxPower, currentPower + count);
                         }
                     }
-                    else
+                    else if (p == 3)
                     {
-                        // Other pots (Pot 4): placeholder trigger
-                        int chanceWeight = _config.PotTriggerChanceWeights[p];
+                        // Pot 4: Primal Zone Bonus (Gorilla) Trigger
+                        int maxPower = _config.PrimalZoneSpins.Length - 1;
+                        int currentPower = Math.Min(maxPower, _potPowers[3]);
+                        int chanceWeight = _config.PrimalZoneTriggerWeights[currentPower];
                         if (rng.Next(chanceWeight) < count)
                         {
-                            // Triggered!
-                            int triggeredPower = _potPowers[p] + (count - 1);
+                            // Triggered! Power increases by N - 1
+                            int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
+                            long bonusWin = RunPrimalZoneBonus(triggeredPower, rng, out int totalBananas, out int finalStage, out int finalSize, out bool minWinApplied);
+
                             spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
                             {
-                                PotIndex = p,
+                                PotIndex = 3,
+                                BonusName = "Primal Zone Bonus",
                                 Power = triggeredPower,
-                                Win = 0,
-                                CompletedSlingos = 0,
-                                CashValuesSum = 0,
-                                LadderPrize = 0,
-                                MinWinApplied = false
+                                Win = bonusWin,
+                                SpinsPlayed = _config.PrimalZoneSpins.Length > triggeredPower ? _config.PrimalZoneSpins[triggeredPower] : 5,
+                                BananasCollected = totalBananas,
+                                FinalPrimalZoneStage = finalStage,
+                                FinalPrimalZoneSize = finalSize,
+                                MinWinApplied = minWinApplied
                             });
-                            
-                            _potPowers[p] = 0; // reset
+
+                            spinResult.FeatureWin += bonusWin;
+                            spinResult.TotalWin += bonusWin;
+
+                            _potPowers[3] = 0; // reset
                         }
                         else
                         {
-                            // Not triggered, increase power
-                            _potPowers[p] += count;
+                            // Not triggered, increase power by count
+                            _potPowers[3] = Math.Min(maxPower, currentPower + count);
                         }
                     }
                 }
@@ -818,6 +827,224 @@ namespace PrimalGame
                 }
             }
             return prize;
+        }
+
+        private long RunPrimalZoneBonus(int powerLevel, IRng rng, out int totalBananasCollected, out int finalStage, out int finalSize, out bool minWinApplied)
+        {
+            int totalSpins = _config.PrimalZoneSpins.Length > powerLevel ? _config.PrimalZoneSpins[powerLevel] : 5;
+            long totalBonusWinInCents = 0;
+            totalBananasCollected = 0;
+
+            int currentStage = 0; // 0 = 2x2, 1 = 3x3, 2 = 4x4, 3 = 5x5
+            int currentSize = _config.PrimalZoneStageSizes.Length > currentStage ? _config.PrimalZoneStageSizes[currentStage] : 2;
+            int pzRow = 0; // Top-left row (0..4)
+            int pzCol = 0; // Top-left col (0..4)
+            int bananasInCurrentStage = 0;
+
+            for (int spin = 0; spin < totalSpins; spin++)
+            {
+                // 1. Determine landing counts for Fire Cores and Bananas
+                int[] fireCoreWeights = GetLandingWeights(currentSize, _config.PrimalZoneFireCoreLandingChanceWeights);
+                int numFireCores = ChooseLandingCount(fireCoreWeights, rng);
+
+                int[] bananaWeights = GetLandingWeights(currentSize, _config.PrimalZoneBananaLandingChanceWeights);
+                int numBananas = ChooseLandingCount(bananaWeights, rng);
+
+                // 2. Select unique grid positions out of 25 grid cells
+                int totalItems = Math.Min(25, numFireCores + numBananas);
+                List<int> positions = SelectUniquePositions(25, totalItems, rng);
+
+                int actualCores = Math.Min(numFireCores, positions.Count);
+                int actualBananas = Math.Min(numBananas, positions.Count - actualCores);
+
+                List<int> corePositions = positions.Take(actualCores).ToList();
+                List<int> bananaPositions = positions.Skip(actualCores).Take(actualBananas).ToList();
+
+                // 3. Assign cash values to each landed item
+                Dictionary<int, long> coreValues = new();
+                foreach (int pos in corePositions)
+                {
+                    int valIdx = ChooseWeightedIndex(_config.PrimalZoneFireCoreWeights, rng);
+                    double valMultiplier = _config.PrimalZoneFireCoreValues[valIdx];
+                    coreValues[pos] = (long)Math.Round(valMultiplier * 100.0);
+                }
+
+                Dictionary<int, long> bananaValues = new();
+                foreach (int pos in bananaPositions)
+                {
+                    int valIdx = ChooseWeightedIndex(_config.PrimalZoneBananaWeights, rng);
+                    double valMultiplier = _config.PrimalZoneBananaValues[valIdx];
+                    bananaValues[pos] = (long)Math.Round(valMultiplier * 100.0);
+                }
+
+                bool IsCovered(int pos, int r, int c, int size)
+                {
+                    int itemRow = pos / 5;
+                    int itemCol = pos % 5;
+                    return itemRow >= r && itemRow < r + size && itemCol >= c && itemCol < c + size;
+                }
+
+                // 4. Award initial Fire Cores inside Primal Zone
+                foreach (int pos in corePositions)
+                {
+                    if (IsCovered(pos, pzRow, pzCol, currentSize))
+                    {
+                        totalBonusWinInCents += coreValues[pos];
+                    }
+                }
+
+                // 5. Process Bananas
+                List<int> remainingBananas = new List<int>();
+                foreach (int pos in bananaPositions)
+                {
+                    if (IsCovered(pos, pzRow, pzCol, currentSize))
+                    {
+                        totalBonusWinInCents += bananaValues[pos];
+                        totalBananasCollected++;
+                        bananasInCurrentStage++;
+
+                        CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
+                    }
+                    else
+                    {
+                        remainingBananas.Add(pos);
+                    }
+                }
+
+                // Chase remaining uncollected Bananas
+                while (remainingBananas.Count > 0)
+                {
+                    int bestPos = -1;
+                    int minDistance = int.MaxValue;
+                    (int targetR, int targetC) bestTarget = (pzRow, pzCol);
+
+                    foreach (int bPos in remainingBananas)
+                    {
+                        int bRow = bPos / 5;
+                        int bCol = bPos % 5;
+
+                        int targetR = Math.Clamp(pzRow, bRow - currentSize + 1, bRow);
+                        int targetC = Math.Clamp(pzCol, bCol - currentSize + 1, bCol);
+                        targetR = Math.Clamp(targetR, 0, 5 - currentSize);
+                        targetC = Math.Clamp(targetC, 0, 5 - currentSize);
+
+                        int dist = Math.Abs(pzRow - targetR) + Math.Abs(pzCol - targetC);
+
+                        if (dist < minDistance)
+                        {
+                            minDistance = dist;
+                            bestPos = bPos;
+                            bestTarget = (targetR, targetC);
+                        }
+                        else if (dist == minDistance && bestPos != -1)
+                        {
+                            int curBRow = bestPos / 5;
+                            int curBCol = bestPos % 5;
+
+                            if (bRow < curBRow || (bRow == curBRow && bCol < curBCol))
+                            {
+                                bestPos = bPos;
+                                bestTarget = (targetR, targetC);
+                            }
+                        }
+                    }
+
+                    // Move step-by-step to bestTarget (Priority: UP -> DOWN -> LEFT -> RIGHT)
+                    while (pzRow != bestTarget.targetR || pzCol != bestTarget.targetC)
+                    {
+                        if (pzRow > bestTarget.targetR) pzRow--;
+                        else if (pzRow < bestTarget.targetR) pzRow++;
+                        else if (pzCol > bestTarget.targetC) pzCol--;
+                        else if (pzCol < bestTarget.targetC) pzCol++;
+
+                        pzRow = Math.Clamp(pzRow, 0, 5 - currentSize);
+                        pzCol = Math.Clamp(pzCol, 0, 5 - currentSize);
+                    }
+
+                    totalBonusWinInCents += bananaValues[bestPos];
+                    totalBananasCollected++;
+                    bananasInCurrentStage++;
+                    remainingBananas.Remove(bestPos);
+
+                    CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
+                }
+            }
+
+            // Guaranteed Bonus Minimum if stage >= 5
+            minWinApplied = false;
+            if (_stageIndex >= 5 && _config.PrimalZoneBonusMinimums.Length > powerLevel)
+            {
+                double minWinMultiplier = _config.PrimalZoneBonusMinimums[powerLevel];
+                long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
+                if (totalBonusWinInCents < minWinInCents)
+                {
+                    totalBonusWinInCents = minWinInCents;
+                    minWinApplied = true;
+                }
+            }
+
+            finalStage = currentStage;
+            finalSize = currentSize;
+
+            return totalBonusWinInCents;
+        }
+
+        private void CheckAndAdvanceStage(ref int currentStage, ref int currentSize, ref int bananasInCurrentStage, ref int pzRow, ref int pzCol)
+        {
+            while (currentStage < 3)
+            {
+                int reqBananas = _config.PrimalZoneStageBananasRequired[currentStage];
+                if (reqBananas > 0 && bananasInCurrentStage >= reqBananas)
+                {
+                    bananasInCurrentStage -= reqBananas;
+                    currentStage++;
+                    currentSize = _config.PrimalZoneStageSizes[currentStage];
+
+                    pzRow = Math.Clamp(pzRow, 0, 5 - currentSize);
+                    pzCol = Math.Clamp(pzCol, 0, 5 - currentSize);
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        private int[] GetLandingWeights(int currentSize, List<PotLandingWeight> landingChanceWeights)
+        {
+            foreach (var lw in landingChanceWeights)
+            {
+                if (lw.Threshold == currentSize)
+                {
+                    return lw.Weights;
+                }
+            }
+            return landingChanceWeights.Count > 0 ? landingChanceWeights[0].Weights : new int[] { 0, 0, 0, 100 };
+        }
+
+        private int ChooseLandingCount(int[] weights, IRng rng)
+        {
+            int rolledIndex = ChooseWeightedIndex(weights, rng);
+            return rolledIndex switch
+            {
+                0 => 3,
+                1 => 2,
+                2 => 1,
+                _ => 0
+            };
+        }
+
+        private List<int> SelectUniquePositions(int totalCells, int count, IRng rng)
+        {
+            List<int> available = Enumerable.Range(0, totalCells).ToList();
+            List<int> selected = new();
+            for (int i = 0; i < count && available.Count > 0; i++)
+            {
+                int idx = rng.Next(available.Count);
+                selected.Add(available[idx]);
+                available.RemoveAt(idx);
+            }
+            return selected;
         }
     }
 }

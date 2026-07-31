@@ -10,7 +10,9 @@ using SlotFramework.Utilities;
 using SlotFramework.Models;
 
 string defaultPath = "FirePrimalElephant95.xlsx";
-string resultsPath = "FirePrimalElephant95_Results.xlsx";
+string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+string downloadsFolder = Path.Combine(userProfile, "Downloads");
+string resultsPath = Path.Combine(downloadsFolder, "FirePrimalElephant95_Results.xlsx");
 
 bool trackFullStats = true;
 string filePath = defaultPath;
@@ -162,6 +164,17 @@ try
     int[] colossalSpinsTriggersByPower = new int[config.ColossalSpinsCounts.Length];
     long[] colossalSpinsWinByPower = new long[config.ColossalSpinsCounts.Length];
     long[] colossalSpinsPlayedByPower = new long[config.ColossalSpinsCounts.Length];
+
+    // Detailed stats for Primal Zone Bonus (Bonus 4)
+    int totalPrimalZoneTriggers = 0;
+    long totalPrimalZoneWin = 0;
+    long totalPrimalZonePlayed = 0;
+    long totalPrimalZoneBananas = 0;
+    int totalPrimalZoneMinWinApplied = 0;
+    int[] primalZoneTriggersByPower = new int[config.PrimalZoneSpins.Length];
+    long[] primalZoneWinByPower = new long[config.PrimalZoneSpins.Length];
+    long[] primalZonePlayedByPower = new long[config.PrimalZoneSpins.Length];
+    int[] primalZoneStageHits = new int[4];
 
     // Colossal Symbol Detailed Stats Breakdown
     var colossalSymbolHits = new Dictionary<int, long>();
@@ -361,6 +374,27 @@ try
                         }
                     }
                 }
+                else if (p == 3)
+                {
+                    totalPrimalZoneTriggers++;
+                    totalPrimalZoneWin += potBonus.Win;
+                    totalPrimalZonePlayed += potBonus.SpinsPlayed;
+                    totalPrimalZoneBananas += potBonus.BananasCollected;
+                    if (potBonus.MinWinApplied)
+                    {
+                        totalPrimalZoneMinWinApplied++;
+                    }
+                    if (potBonus.Power >= 0 && potBonus.Power < primalZoneTriggersByPower.Length)
+                    {
+                        primalZoneTriggersByPower[potBonus.Power]++;
+                        primalZoneWinByPower[potBonus.Power] += potBonus.Win;
+                        primalZonePlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                    if (potBonus.FinalPrimalZoneStage >= 0 && potBonus.FinalPrimalZoneStage < 4)
+                    {
+                        primalZoneStageHits[potBonus.FinalPrimalZoneStage]++;
+                    }
+                }
             }
         }
         else
@@ -390,6 +424,12 @@ try
                     totalColossalSpinsWin += potBonus.Win;
                     totalColossalSpinsPlayed += potBonus.SpinsPlayed;
                 }
+                else if (potBonus.PotIndex == 3)
+                {
+                    totalPrimalZoneTriggers++;
+                    totalPrimalZoneWin += potBonus.Win;
+                    totalPrimalZonePlayed += potBonus.SpinsPlayed;
+                }
             }
         }
     }
@@ -416,8 +456,16 @@ try
     double avgColossalSpinsWinMultiplier = totalColossalSpinsTriggers > 0 ? (double)totalColossalSpinsWin / (totalColossalSpinsTriggers * 100.0) : 0.0;
     double avgColossalSpinsSpinsPlayed = totalColossalSpinsTriggers > 0 ? (double)totalColossalSpinsPlayed / totalColossalSpinsTriggers : 0.0;
 
+    double primalZoneRtp = (double)totalPrimalZoneWin / (totalSpins * 100.0);
+    double primalZoneTriggerChance = (double)totalPrimalZoneTriggers / totalSpins;
+    string primalZoneTriggerFreqStr = primalZoneTriggerChance > 0 ? $"1 in {1.0 / primalZoneTriggerChance:F1} spins ({primalZoneTriggerChance:P4})" : "Never";
+    double avgPrimalZoneWinMultiplier = totalPrimalZoneTriggers > 0 ? (double)totalPrimalZoneWin / (totalPrimalZoneTriggers * 100.0) : 0.0;
+    double avgPrimalZoneSpinsPlayed = totalPrimalZoneTriggers > 0 ? (double)totalPrimalZonePlayed / totalPrimalZoneTriggers : 0.0;
+    double avgPrimalZoneBananas = totalPrimalZoneTriggers > 0 ? (double)totalPrimalZoneBananas / totalPrimalZoneTriggers : 0.0;
+    double primalZoneMinWinPercent = totalPrimalZoneTriggers > 0 ? (double)totalPrimalZoneMinWinApplied / totalPrimalZoneTriggers : 0.0;
+
     double jackpotBonusRtp = (double)totalJackpotBonusWin / (totalSpins * 100.0);
-    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin - totalColossalSpinsWin) / (totalSpins * 100.0);
+    double collectFeatureRtp = (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin - totalColossalSpinsWin - totalPrimalZoneWin) / (totalSpins * 100.0);
     
     // Construct order-preserving stats dictionary following the requested sections
     var stats = new Dictionary<string, string>();
@@ -434,7 +482,7 @@ try
     stats["Lock & Slingo (Bonus 1) RTP"] = $"{lockSlingoRtp:P2}";
     stats["Apex Spins (Bonus 2) RTP"] = $"{apexSpinsRtp:P2}";
     stats["Colossal Spins (Bonus 3) RTP"] = $"{colossalSpinsRtp:P2}";
-    stats["Bonus 4 RTP"] = "0.00%";
+    stats["Primal Zone (Bonus 4) RTP"] = $"{primalZoneRtp:P2}";
     stats["Hit Frequency"] = $"{hitFreq:P2}";
     stats["Stage 6 Power Max Triggers"] = totalPowerUpTriggers.ToString("N0");
     stats["Number of Base Game Stages"] = config.BaseGameStageWeights.Count.ToString();
@@ -449,22 +497,23 @@ try
         string fireCoreLandingFreqStr = fireCoreLandingChance > 0 ? $"1 in {1.0 / fireCoreLandingChance:F1} spins ({fireCoreLandingChance:P2})" : "Never";
         string collectionTriggerFreqStr = collectionTriggerChance > 0 ? $"1 in {1.0 / collectionTriggerChance:F1} spins ({collectionTriggerChance:P2})" : "Never";
 
-        double avgFeatureWinMultiplier = collectionTriggerSpins > 0 ? (double)(totalFeatureWin - totalJackpotBonusWin - totalLockSlingoWin - totalApexSpinsWin) / (collectionTriggerSpins * 100.0) : 0.0;
-        double avgCollectedCashMultiplier = collectionTriggerSpins > 0 ? totalCollectCashMultiplierSum / collectionTriggerSpins : 0.0;
+        double avgFeatureWinMultiplier = collectionTriggerSpins > 0 ? (double)totalFeatureWin / (collectionTriggerSpins * 100.0) : 0.0;
+        double avgCollectedCashMultiplier = collectionTriggerSpins > 0 ? (double)totalCollectCashMultiplierSum / collectionTriggerSpins : 0.0;
         double avgCollectedFireCores = collectionTriggerSpins > 0 ? (double)totalCollectFireCoresCount / collectionTriggerSpins : 0.0;
 
         // SECTION 2: Collector Feature
-        stats["Collector Feature Trigger Frequency"] = collectionTriggerFreqStr;
-        stats["Collector Average Pay when Triggered"] = $"{avgFeatureWinMultiplier:F2}x bet";
-        stats["Collector Total Triggers"] = collectionTriggerSpins.ToString("N0");
-        stats["Collector Single Collector Triggers (1x)"] = $"{collectTriggersWith1Collector:N0} ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith1Collector/collectionTriggerSpins : 0.0):P2})";
-        stats["Collector Double Collector Triggers (2x)"] = $"{collectTriggersWith2Collectors:N0} ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith2Collectors/collectionTriggerSpins : 0.0):P2})";
-        stats["Collector Average Cash Multiplier Collected"] = $"{avgCollectedCashMultiplier:F2}x bet";
-        stats["Collector Average Fire Cores Collected"] = $"{avgCollectedFireCores:F2}";
-        stats["Collector Waste Spins (Collector, no Cash)"] = $"{spinsWithCollectorButNoFireCore:N0} ({(double)spinsWithCollectorButNoFireCore/totalSpins:P2})";
-        stats["Collector Uncollected Spins (Cash, no Collector)"] = $"{spinsWithFireCoreButNoCollector:N0} ({(double)spinsWithFireCoreButNoCollector/totalSpins:P2})";
-        stats["Collector Landing Freq (Reel 0 or 4)"] = collectorLandingFreqStr;
-        stats["Collector Landing Fire Core Freq"] = fireCoreLandingFreqStr;
+        stats["Collector Feature RTP"] = $"{collectFeatureRtp:P2}";
+        stats["Collector Feature Collection Trigger Freq"] = collectionTriggerFreqStr;
+        stats["Collector Feature Average Pay when Triggered"] = $"{avgFeatureWinMultiplier:F2}x bet";
+        stats["Collector Feature Total Collection Triggers"] = collectionTriggerSpins.ToString("N0");
+        stats["Collector Feature Single Collector (1x) Triggers"] = $"{collectTriggersWith1Collector:N0} ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith1Collector/collectionTriggerSpins : 0.0):P2})";
+        stats["Collector Feature Double Collector (2x) Triggers"] = $"{collectTriggersWith2Collectors:N0} ({(collectionTriggerSpins > 0 ? (double)collectTriggersWith2Collectors/collectionTriggerSpins : 0.0):P2})";
+        stats["Collector Feature Avg Cash Value Sum Collected"] = $"{avgCollectedCashMultiplier:F2}x bet";
+        stats["Collector Feature Avg Fire Cores Collected"] = $"{avgCollectedFireCores:F2}";
+        stats["Collector Feature Waste Spins (Collector, no Fire Core)"] = $"{spinsWithCollectorButNoFireCore:N0} ({(double)spinsWithCollectorButNoFireCore/totalSpins:P2})";
+        stats["Collector Feature Uncollected Spins (Fire Core, no Collector)"] = $"{spinsWithFireCoreButNoCollector:N0} ({(double)spinsWithFireCoreButNoCollector/totalSpins:P2})";
+        stats["Collector Feature Landing Collector Freq (Reel 0 or 4)"] = collectorLandingFreqStr;
+        stats["Collector Feature Landing Fire Core Freq"] = fireCoreLandingFreqStr;
 
         double jackpotBonusTriggerChance = (double)totalJackpotBonusTriggers / totalSpins;
         string jackpotBonusTriggerFreqStr = jackpotBonusTriggerChance > 0 ? $"1 in {1.0 / jackpotBonusTriggerChance:F1} spins ({jackpotBonusTriggerChance:P4})" : "Never";
@@ -472,25 +521,25 @@ try
         double avgFireCoresOnJackpotTrigger = totalJackpotBonusTriggers > 0 ? (double)totalFireCoresOnJackpotTrigger / totalJackpotBonusTriggers : 0.0;
 
         // SECTION 3: Jackpot Bonus
-        stats["Jackpot Bonus Trigger Frequency"] = jackpotBonusTriggerFreqStr;
-        stats["Jackpot Bonus Average Win"] = $"{avgJackpotBonusWinMultiplier:F2}x bet";
-        stats["Jackpot Bonus Average Fire Cores on Trigger"] = $"{avgFireCoresOnJackpotTrigger:F2}";
+        stats["Jackpot Bonus RTP"] = $"{jackpotBonusRtp:P2}";
+        stats["Jackpot Bonus Trigger Freq"] = jackpotBonusTriggerFreqStr;
+        stats["Jackpot Bonus Average Pay when Triggered"] = $"{avgJackpotBonusWinMultiplier:F2}x bet";
+        stats["Jackpot Bonus Avg Fire Cores on Screen when Triggered"] = $"{avgFireCoresOnJackpotTrigger:F2}";
         foreach (var jpName in config.JackpotNames)
         {
             int hits = jackpotHits[jpName];
             double winChanceInBonus = totalJackpotBonusTriggers > 0 ? (double)hits / totalJackpotBonusTriggers : 0.0;
             double jpRtp = (double)jackpotWins[jpName] / (totalSpins * 100.0);
             string jpFreqInBonus = winChanceInBonus > 0 ? $"1 in {1.0 / winChanceInBonus:F1} triggers" : "Never";
-            stats[$"Jackpot {jpName} Hits"] = hits.ToString("N0");
-            stats[$"Jackpot {jpName} RTP"] = $"{jpRtp:P4}";
-            stats[$"Jackpot {jpName} Win % in Bonus"] = $"{winChanceInBonus:P2} ({jpFreqInBonus})";
+            stats[$"Jackpot Winner - {jpName}"] = $"Hits: {hits:N0} | RTP: {jpRtp:P4} | Chance in Bonus: {winChanceInBonus:P2} ({jpFreqInBonus})";
         }
         for (int c = 1; c < jackpotTriggersByFireCoreCount.Length; c++)
         {
             int hits = jackpotTriggersByFireCoreCount[c];
             if (hits > 0)
             {
-                stats[$"Jackpot Triggered by Landed {c} Fire Cores"] = $"{hits:N0} ({(double)hits/totalJackpotBonusTriggers:P2})";
+                double pctOfTriggers = totalJackpotBonusTriggers > 0 ? (double)hits / totalJackpotBonusTriggers : 0.0;
+                stats[$"Jackpot Bonus Landed {c} Fire Cores Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers)";
             }
         }
 
@@ -508,7 +557,7 @@ try
         stats["Bonus 1 Trigger Frequency"] = lockSlingoTriggerFreqStr;
         stats["Bonus 1 Average Power on Trigger"] = $"{avgPower1:F2}";
         stats["Bonus 1 Average Starting Spins"] = $"{avgStartingSpins:F2} spins";
-        stats["Bonus 1 Average Win"] = $"{avgLockSlingoWinMultiplier:F2}x bet";
+        stats["Bonus 1 Average Lock & Slingo Win"] = $"{avgLockSlingoWinMultiplier:F2}x bet";
         stats["Bonus 1 Average Completed Slingos"] = $"{avgLockSlingoSlingos:F2}";
         stats["Bonus 1 Average Cash Values Sum"] = $"{avgLockSlingoCashSum:F2}x bet";
         stats["Bonus 1 Average Ladder Prize"] = $"{avgLockSlingoLadderSum:F2}x bet";
@@ -520,8 +569,7 @@ try
             double pctOfTriggers = totalLockSlingoTriggers > 0 ? (double)hits / totalLockSlingoTriggers : 0.0;
             double hitRate = (double)hits / totalSpins;
             string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
-            stats[$"Bonus 1 Power {L} ({config.LockSlingoSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers)";
-            stats[$"Bonus 1 Power {L} Trigger Chance (% of spins)"] = hitRate > 0 ? $"{hitRate:P4} ({freqStr})" : "Never";
+            stats[$"Bonus 1 Power {L} ({config.LockSlingoSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of total triggers | {freqStr})";
         }
 
         // SECTION 5: Bonus 2 (Apex Spins)
@@ -595,16 +643,33 @@ try
             stats[$"Colossal Symbol {symId} ({symName}) Avg Win"] = $"{avgWin:F2}x bet";
         }
 
-        // SECTION 7: Bonus 4
+        // SECTION 7: Bonus 4 (Primal Zone Bonus)
         double landingChance4 = (double)spinsWithPotTrigger[3] / totalSpins;
         string landingFreqStr4 = landingChance4 > 0 ? $"1 in {1.0 / landingChance4:F1} spins ({landingChance4:P2})" : "Never";
-        double triggerChance4 = (double)totalPotTriggers[3] / totalSpins;
-        string triggerFreqStr4 = triggerChance4 > 0 ? $"1 in {1.0 / triggerChance4:F1} spins ({triggerChance4:P4})" : "Never";
         double avgPower4 = totalPotTriggers[3] > 0 ? (double)totalPotTriggerPowers[3] / totalPotTriggers[3] : 0.0;
 
         stats["Bonus 4 Landing Pot Trigger Freq"] = landingFreqStr4;
-        stats["Bonus 4 Trigger Frequency"] = triggerFreqStr4;
+        stats["Bonus 4 Trigger Frequency"] = primalZoneTriggerFreqStr;
         stats["Bonus 4 Average Power on Trigger"] = $"{avgPower4:F2}";
+        stats["Bonus 4 Average Win"] = $"{avgPrimalZoneWinMultiplier:F2}x bet";
+        stats["Bonus 4 Average Spins Awarded"] = $"{avgPrimalZoneSpinsPlayed:F2} spins";
+        stats["Bonus 4 Average Bananas Collected"] = $"{avgPrimalZoneBananas:F2}";
+        stats["Bonus 4 Guaranteed Minimum Applied %"] = $"{primalZoneMinWinPercent:P2}";
+
+        for (int L = 0; L < primalZoneTriggersByPower.Length; L++)
+        {
+            int hits = primalZoneTriggersByPower[L];
+            double pctOfTriggers = totalPrimalZoneTriggers > 0 ? (double)hits / totalPrimalZoneTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            double avgWin = hits > 0 ? (double)primalZoneWinByPower[L] / (hits * 100.0) : 0.0;
+            double avgSpins = hits > 0 ? (double)primalZonePlayedByPower[L] / hits : 0.0;
+
+            stats[$"Bonus 4 Power {L} ({config.PrimalZoneSpins[L]} spins) Hits"] = $"{hits:N0} ({pctOfTriggers:P2} of triggers)";
+            stats[$"Bonus 4 Power {L} Trigger Chance (% of spins)"] = hitRate > 0 ? $"{hitRate:P4} ({freqStr})" : "Never";
+            stats[$"Bonus 4 Power {L} Avg Win"] = $"{avgWin:F2}x bet";
+            stats[$"Bonus 4 Power {L} Avg Spins"] = $"{avgSpins:F2} spins";
+        }
 
         // Console Prints following the exact structured hierarchy:
         Console.WriteLine($"Simulation complete!");
@@ -615,7 +680,7 @@ try
         Console.WriteLine($"    - Lock & Slingo (Bonus 1) RTP: {lockSlingoRtp:P2}");
         Console.WriteLine($"    - Apex Spins (Bonus 2) RTP: {apexSpinsRtp:P2}");
         Console.WriteLine($"    - Colossal Spins (Bonus 3) RTP: {colossalSpinsRtp:P2}");
-        Console.WriteLine($"    - Bonus 4 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"    - Primal Zone (Bonus 4) RTP: {primalZoneRtp:P2}");
         Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
         
         Console.WriteLine("\n=========================================================================================");
@@ -724,11 +789,27 @@ try
             Console.WriteLine($"    Power Level {L,2} ({config.ColossalSpinsCounts[L],2} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
         }
 
-        Console.WriteLine("\n[Bonus 4]");
+        Console.WriteLine("\n[Bonus 4 - Primal Zone Bonus]");
+        Console.WriteLine($"  - Primal Zone Bonus Total RTP: {primalZoneRtp:P2}");
         Console.WriteLine($"  - Landing Pot Trigger Freq: {landingFreqStr4}");
-        Console.WriteLine($"  - Trigger Frequency: {triggerFreqStr4}");
+        Console.WriteLine($"  - Trigger Frequency: {primalZoneTriggerFreqStr}");
         Console.WriteLine($"  - Average Power on Trigger: {avgPower4:F2}");
-        Console.WriteLine("  - Bonus 4 RTP: 0.00% (Placeholder)");
+        Console.WriteLine($"  - Average Win: {avgPrimalZoneWinMultiplier:F2}x bet");
+        Console.WriteLine($"  - Average Spins Awarded: {avgPrimalZoneSpinsPlayed:F2} spins");
+        Console.WriteLine($"  - Average Bananas Collected: {avgPrimalZoneBananas:F2}");
+        Console.WriteLine($"  - Guaranteed Minimum Win Applied %: {primalZoneMinWinPercent:P2}");
+        Console.WriteLine("  - Hit Distribution & Stats by Power Level:");
+        for (int L = 0; L < primalZoneTriggersByPower.Length; L++)
+        {
+            int hits = primalZoneTriggersByPower[L];
+            double pctOfTriggers = totalPrimalZoneTriggers > 0 ? (double)hits / totalPrimalZoneTriggers : 0.0;
+            double hitRate = (double)hits / totalSpins;
+            string freqStr = hits > 0 ? $"1 in {(1.0 / hitRate):N1} spins" : "Never";
+            double avgWin = hits > 0 ? (double)primalZoneWinByPower[L] / (hits * 100.0) : 0.0;
+            double avgSpins = hits > 0 ? (double)primalZonePlayedByPower[L] / hits : 0.0;
+
+            Console.WriteLine($"    Power Level {L,2} ({config.PrimalZoneSpins[L],2} spins): Hits = {hits,6:N0} | {pctOfTriggers,6:P2} of triggers ({freqStr}) | Avg Win = {avgWin,6:F2}x bet | Avg Spins = {avgSpins,5:F2}");
+        }
 
         Console.WriteLine($"\nStage 6 Power Max Triggers Count: {totalPowerUpTriggers}");
     }

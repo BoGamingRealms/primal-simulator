@@ -85,6 +85,19 @@ public class PrimalConfig
     public int[] ColossalSpinsReelsetWeights { get; set; } = Array.Empty<int>();
     public Dictionary<string, ReelSet> ColossalSpinsReelsets { get; set; } = new();
 
+    // Primal Zone Bonus (Bonus 4) configuration
+    public int[] PrimalZoneSpins { get; set; } = Array.Empty<int>();
+    public int[] PrimalZoneTriggerWeights { get; set; } = Array.Empty<int>();
+    public double[] PrimalZoneBonusMinimums { get; set; } = Array.Empty<double>();
+    public double[] PrimalZoneFireCoreValues { get; set; } = Array.Empty<double>();
+    public int[] PrimalZoneFireCoreWeights { get; set; } = Array.Empty<int>();
+    public double[] PrimalZoneBananaValues { get; set; } = Array.Empty<double>();
+    public int[] PrimalZoneBananaWeights { get; set; } = Array.Empty<int>();
+    public int[] PrimalZoneStageSizes { get; set; } = new int[] { 2, 3, 4, 5 };
+    public int[] PrimalZoneStageBananasRequired { get; set; } = new int[] { 5, 4, 3, 0 };
+    public List<PotLandingWeight> PrimalZoneFireCoreLandingChanceWeights { get; set; } = new();
+    public List<PotLandingWeight> PrimalZoneBananaLandingChanceWeights { get; set; } = new();
+
     // Pre-allocated arrays for ultra-fast lookup during simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();

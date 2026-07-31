@@ -616,6 +616,168 @@ public class ExcelConfigLoader
             config.ColossalSpinsReelsets[reelsetName] = new ReelSet(reels);
         }
 
+        // Load Primal Zone Bonus (Bonus 4) configuration starting from Row 244 (index 243)
+        if (dataTable.Rows.Count > 243)
+        {
+            var row = dataTable.Rows[243];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneSpins = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Primal Zone Trigger Weights from Row 245 (index 244)
+        if (dataTable.Rows.Count > 244)
+        {
+            var row = dataTable.Rows[244];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneTriggerWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Primal Zone Bonus Minimums from Row 246 (index 245)
+        if (dataTable.Rows.Count > 245)
+        {
+            var row = dataTable.Rows[245];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneBonusMinimums = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Fire Core Cash Payouts from Row 247 (index 246)
+        if (dataTable.Rows.Count > 246)
+        {
+            var row = dataTable.Rows[246];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneFireCoreValues = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Fire Core Cash Weights from Row 248 (index 247)
+        if (dataTable.Rows.Count > 247)
+        {
+            var row = dataTable.Rows[247];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneFireCoreWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Bananas Cash Payouts from Row 249 (index 248)
+        if (dataTable.Rows.Count > 248)
+        {
+            var row = dataTable.Rows[248];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneBananaValues = colB.Split(',').Select(s => double.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Bananas Cash Weights from Row 250 (index 249)
+        if (dataTable.Rows.Count > 249)
+        {
+            var row = dataTable.Rows[249];
+            if (row.ItemArray.Length > 1 && row[1] != DBNull.Value)
+            {
+                var colB = row[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneBananaWeights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Bonus Stages & Required Bananas from Rows 251 & 252 (indices 250 & 251)
+        if (dataTable.Rows.Count > 251)
+        {
+            var row252 = dataTable.Rows[251];
+            if (row252.ItemArray.Length > 1 && row252[1] != DBNull.Value)
+            {
+                var colB = row252[1]?.ToString();
+                if (!string.IsNullOrWhiteSpace(colB))
+                {
+                    config.PrimalZoneStageBananasRequired = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                }
+            }
+        }
+
+        // Load Fire Core Landing Table from Rows 254 to 257 (indices 253 to 256)
+        config.PrimalZoneFireCoreLandingChanceWeights = new List<PotLandingWeight>();
+        for (int r = 253; r <= 256; r++)
+        {
+            if (dataTable.Rows.Count > r)
+            {
+                var row = dataTable.Rows[r];
+                if (row.ItemArray.Length > 1 && row[0] != DBNull.Value && row[1] != DBNull.Value)
+                {
+                    var colA = row[0]?.ToString();
+                    var colB = row[1]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(colA) && !string.IsNullOrWhiteSpace(colB))
+                    {
+                        int size = int.Parse(colA.Split('x')[0].Trim());
+                        int[] weights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                        config.PrimalZoneFireCoreLandingChanceWeights.Add(new PotLandingWeight
+                        {
+                            Threshold = size,
+                            Weights = weights
+                        });
+                    }
+                }
+            }
+        }
+
+        // Load Bananas Landing Table from Rows 259 to 262 (indices 258 to 261)
+        config.PrimalZoneBananaLandingChanceWeights = new List<PotLandingWeight>();
+        for (int r = 258; r <= 261; r++)
+        {
+            if (dataTable.Rows.Count > r)
+            {
+                var row = dataTable.Rows[r];
+                if (row.ItemArray.Length > 1 && row[0] != DBNull.Value && row[1] != DBNull.Value)
+                {
+                    var colA = row[0]?.ToString();
+                    var colB = row[1]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(colA) && !string.IsNullOrWhiteSpace(colB))
+                    {
+                        int size = int.Parse(colA.Split('x')[0].Trim());
+                        int[] weights = colB.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
+                        config.PrimalZoneBananaLandingChanceWeights.Add(new PotLandingWeight
+                        {
+                            Threshold = size,
+                            Weights = weights
+                        });
+                    }
+                }
+            }
+        }
+
         config.PrepareForSimulation();
 
         return config;
