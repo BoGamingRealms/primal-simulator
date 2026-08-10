@@ -69,6 +69,10 @@ public class ExcelConfigLoader
                             int matchCount = startMatch + i;
                             long payoutInCents = (long)Math.Round(multiplier * 100);
                             config.Paytable.AddPayout(symbolId, matchCount, payoutInCents);
+                            if (symbolId >= 0 && symbolId < 16 && matchCount >= 0 && matchCount < 6)
+                            {
+                                config.FastPaytableMatrix[symbolId, matchCount] = payoutInCents;
+                            }
                         }
                     }
                 }

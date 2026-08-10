@@ -582,7 +582,7 @@ namespace PrimalGame
                         }
                     }
 
-                    long payout = _config.FastPaytable[sym.Id][matchCount];
+                    long payout = _config.FastPaytableMatrix[sym.Id, matchCount];
                     if (payout > maxPayout)
                     {
                         maxPayout = payout;

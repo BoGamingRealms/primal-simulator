@@ -12,6 +12,7 @@ public class PrimalConfig
     public ReelSet FreeReels { get; set; } = new();
     public Dictionary<string, ReelSet> Reelsets { get; set; } = new();
     public int[][] Paylines { get; set; } = Array.Empty<int[]>();
+    public long[,] FastPaytableMatrix { get; set; } = new long[16, 6];
     
     // Core parameters
     public int WildSymbolId { get; set; }
