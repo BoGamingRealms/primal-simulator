@@ -209,6 +209,16 @@ public class ExcelConfigLoader
         }
         config.Paylines = paylinesList.ToArray();
 
+        // Validate section row headers for configuration integrity
+        ValidateRowHeader(dataTable, 146, "Fire Core");
+        ValidateRowHeader(dataTable, 148, "Bonus");
+        ValidateRowHeader(dataTable, 149, "Jackpot");
+        ValidateRowHeader(dataTable, 152, "Pot");
+        ValidateRowHeader(dataTable, 154, "Lock & Slingo");
+        ValidateRowHeader(dataTable, 165, "Apex");
+        ValidateRowHeader(dataTable, 204, "Colossal");
+        ValidateRowHeader(dataTable, 243, "Primal Zone");
+
         // Load Fire Core values from Row 147 (index 146): Col B (Special for Reelsets 8,9,10), Col C (Default for other reelsets)
         if (dataTable.Rows.Count > 146)
         {
@@ -890,5 +900,18 @@ public class ExcelConfigLoader
 
         worksheet.Columns().AdjustToContents();
         workbook.SaveAs(outputFilePath);
+    }
+
+    private static void ValidateRowHeader(DataTable dataTable, int rowIndex, string expectedKeyword)
+    {
+        if (rowIndex < dataTable.Rows.Count)
+        {
+            var row = dataTable.Rows[rowIndex];
+            string colA = row[0]?.ToString()?.Trim() ?? "";
+            if (!string.IsNullOrWhiteSpace(colA) && !colA.Contains(expectedKeyword, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[Config Warning] Row {rowIndex + 1} Col A was expected to contain '{expectedKeyword}', but found '{colA}'.");
+            }
+        }
     }
 }

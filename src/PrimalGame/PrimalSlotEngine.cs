@@ -4,12 +4,18 @@ using System.Linq;
 using SlotFramework.Interfaces;
 using SlotFramework.Models;
 using PrimalGame.Config;
+using PrimalGame.Features;
 
 namespace PrimalGame
 {
     public class PrimalSlotEngine : ISlotEngine
     {
         private readonly PrimalConfig _config;
+        private readonly LockSlingoFeature _lockSlingoFeature;
+        private readonly ApexSpinsFeature _apexSpinsFeature;
+        private readonly ColossalSpinsFeature _colossalSpinsFeature;
+        private readonly PrimalZoneFeature _primalZoneFeature;
+
         private string _currentStage = "Stage0";
         private int _spinsInCurrentStage = 0;
         private int _stageIndex = 0;
@@ -20,6 +26,10 @@ namespace PrimalGame
         public PrimalSlotEngine(PrimalConfig config)
         {
             _config = config;
+            _lockSlingoFeature = new LockSlingoFeature(config);
+            _apexSpinsFeature = new ApexSpinsFeature(config);
+            _colossalSpinsFeature = new ColossalSpinsFeature(config);
+            _primalZoneFeature = new PrimalZoneFeature(config);
         }
 
         public string CurrentStage => _currentStage;
@@ -485,10 +495,10 @@ namespace PrimalGame
                     else if (p == 3)
                     {
                         // Pot 4: Primal Zone Bonus (Gorilla) Trigger
-                        int maxPower = _config.PrimalZoneSpins.Length - 1;
+                        int maxPower = _config.PrimalZoneTriggerWeights.Length > 0 ? _config.PrimalZoneTriggerWeights.Length - 1 : 0;
                         int currentPower = Math.Min(maxPower, _potPowers[3]);
-                        int chanceWeight = _config.PrimalZoneTriggerWeights[currentPower];
-                        if (rng.Next(chanceWeight) < count)
+                        int chanceWeight = (currentPower >= 0 && currentPower < _config.PrimalZoneTriggerWeights.Length) ? _config.PrimalZoneTriggerWeights[currentPower] : 0;
+                        if (chanceWeight > 0 && rng.Next(chanceWeight) < count)
                         {
                             // Triggered! Power increases by N - 1
                             int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
@@ -526,159 +536,22 @@ namespace PrimalGame
 
         private long RunApexSpinsBonus(int powerLevel, IRng rng, out int spinsPlayed, out bool minWinApplied)
         {
-            double topSpinAwardMultiplier = _config.ApexSpinsTopAwardMultipliers[powerLevel];
-            long topSpinAwardInCents = (long)Math.Round(topSpinAwardMultiplier * 100.0);
-
-            bool[,] lockedWilds = new bool[5, 3];
-            spinsPlayed = 0;
-            long totalBonusWinInCents = 0;
-
-            while (true)
-            {
-                spinsPlayed++;
-
-                // Pick a reelset based on weights
-                int chosenIdx = ChooseWeightedIndex(_config.ApexSpinsReelsetWeights, rng);
-                string reelsetName = $"Reelset{chosenIdx}";
-
-                if (!_config.ApexSpinsReelsets.TryGetValue(reelsetName, out var reelset))
-                {
-                    reelset = _config.ApexSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
-                }
-
-                int[][] screenSymbols = new int[5][];
-                for (int r = 0; r < 5; r++)
-                {
-                    screenSymbols[r] = new int[3];
-                    var strip = reelset.Reels[r];
-                    int stopIndex = rng.Next(strip.Length);
-                    screenSymbols[r][0] = reelset.GetSymbolAt(r, stopIndex, 0);
-                    screenSymbols[r][1] = reelset.GetSymbolAt(r, stopIndex, 1);
-                    screenSymbols[r][2] = reelset.GetSymbolAt(r, stopIndex, 2);
-                }
-
-                // Apply locked Wilds & lock any new Wilds
-                for (int r = 0; r < 5; r++)
-                {
-                    for (int row = 0; row < 3; row++)
-                    {
-                        if (lockedWilds[r, row])
-                        {
-                            screenSymbols[r][row] = _config.WildSymbolId;
-                        }
-                        else if (screenSymbols[r][row] == _config.WildSymbolId)
-                        {
-                            lockedWilds[r, row] = true;
-                        }
-                    }
-                }
-
-                // Evaluate line wins for this spin
-                long singleSpinWin = EvaluateGridLineWins(screenSymbols);
-                totalBonusWinInCents += singleSpinWin;
-
-                // Stop condition: single spin win >= top spin award
-                if (singleSpinWin >= topSpinAwardInCents)
-                {
-                    break;
-                }
-            }
-
-            // Guaranteed Bonus Minimum if stage >= 5
-            minWinApplied = false;
-            if (_stageIndex >= 5 && _config.ApexSpinsBonusMinimums.Length > powerLevel)
-            {
-                double minWinMultiplier = _config.ApexSpinsBonusMinimums[powerLevel];
-                long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
-                if (totalBonusWinInCents < minWinInCents)
-                {
-                    totalBonusWinInCents = minWinInCents;
-                    minWinApplied = true;
-                }
-            }
-
-            return totalBonusWinInCents;
+            return _apexSpinsFeature.Run(powerLevel, _stageIndex, rng, EvaluateGridLineWins, out spinsPlayed, out minWinApplied);
         }
 
         private long RunColossalSpinsBonus(int powerLevel, IRng rng, out int spinsPlayed, out bool minWinApplied, out Dictionary<int, long> colossalSymbolWins, out Dictionary<int, int> colossalSymbolHits)
         {
-            int totalSpins = _config.ColossalSpinsCounts.Length > powerLevel ? _config.ColossalSpinsCounts[powerLevel] : 5;
-            spinsPlayed = totalSpins;
-            long totalBonusWinInCents = 0;
+            return _colossalSpinsFeature.Run(powerLevel, _stageIndex, rng, EvaluateGridLineWins, out spinsPlayed, out minWinApplied, out colossalSymbolWins, out colossalSymbolHits);
+        }
 
-            colossalSymbolWins = new Dictionary<int, long>();
-            colossalSymbolHits = new Dictionary<int, int>();
+        private long RunLockSlingoBonus(int powerLevel, IRng rng, out int completedSlingos, out double cashValuesSum, out double ladderPrize, out bool minWinApplied)
+        {
+            return _lockSlingoFeature.Run(powerLevel, _stageIndex, rng, out completedSlingos, out cashValuesSum, out ladderPrize, out minWinApplied);
+        }
 
-            for (int spin = 0; spin < totalSpins; spin++)
-            {
-                // Select a reelset for EACH colossal spin based on reelset weights
-                int chosenIdx = ChooseWeightedIndex(_config.ColossalSpinsReelsetWeights, rng);
-                string reelsetName = $"Reelset{chosenIdx}";
-
-                if (!_config.ColossalSpinsReelsets.TryGetValue(reelsetName, out var reelset))
-                {
-                    reelset = _config.ColossalSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
-                }
-
-                int len0 = reelset.Reels[0].Length;
-                int lenMid = reelset.Reels[1].Length;
-                int len4 = reelset.Reels[4].Length;
-
-                int[][] screenSymbols = new int[5][];
-
-                // Reel 0 (independent stop index)
-                int stop0 = rng.Next(len0);
-                screenSymbols[0] = new int[3];
-                screenSymbols[0][0] = reelset.GetSymbolAt(0, stop0, 0);
-                screenSymbols[0][1] = reelset.GetSymbolAt(0, stop0, 1);
-                screenSymbols[0][2] = reelset.GetSymbolAt(0, stop0, 2);
-
-                // Middle 3 reels (Reels 1, 2, 3) spin TOGETHER with a single shared stop index!
-                int stopMid = rng.Next(lenMid);
-                for (int r = 1; r <= 3; r++)
-                {
-                    screenSymbols[r] = new int[3];
-                    screenSymbols[r][0] = reelset.GetSymbolAt(r, stopMid, 0);
-                    screenSymbols[r][1] = reelset.GetSymbolAt(r, stopMid, 1);
-                    screenSymbols[r][2] = reelset.GetSymbolAt(r, stopMid, 2);
-                }
-
-                // Reel 4 (independent stop index)
-                int stop4 = rng.Next(len4);
-                screenSymbols[4] = new int[3];
-                screenSymbols[4][0] = reelset.GetSymbolAt(4, stop4, 0);
-                screenSymbols[4][1] = reelset.GetSymbolAt(4, stop4, 1);
-                screenSymbols[4][2] = reelset.GetSymbolAt(4, stop4, 2);
-
-                // Evaluate line wins for this spin
-                long spinWin = EvaluateGridLineWins(screenSymbols);
-                totalBonusWinInCents += spinWin;
-
-                // Identify the landed 3x3 colossal symbol (center symbol at Reel 1, Row 1)
-                int colossalSym = screenSymbols[1][1];
-                if (!colossalSymbolWins.ContainsKey(colossalSym))
-                {
-                    colossalSymbolWins[colossalSym] = 0;
-                    colossalSymbolHits[colossalSym] = 0;
-                }
-                colossalSymbolHits[colossalSym]++;
-                colossalSymbolWins[colossalSym] += spinWin;
-            }
-
-            // Guaranteed Bonus Minimum if stage >= 5
-            minWinApplied = false;
-            if (_stageIndex >= 5 && _config.ColossalSpinsBonusMinimums.Length > powerLevel)
-            {
-                double minWinMultiplier = _config.ColossalSpinsBonusMinimums[powerLevel];
-                long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
-                if (totalBonusWinInCents < minWinInCents)
-                {
-                    totalBonusWinInCents = minWinInCents;
-                    minWinApplied = true;
-                }
-            }
-
-            return totalBonusWinInCents;
+        private long RunPrimalZoneBonus(int powerLevel, IRng rng, out int totalBananasCollected, out int finalStage, out int finalSize, out bool minWinApplied)
+        {
+            return _primalZoneFeature.Run(powerLevel, _stageIndex, rng, out totalBananasCollected, out finalStage, out finalSize, out minWinApplied);
         }
 
         private long EvaluateGridLineWins(int[][] screenSymbols)
@@ -721,354 +594,19 @@ namespace PrimalGame
             return totalWin;
         }
 
-        private long RunLockSlingoBonus(int powerLevel, IRng rng, out int completedSlingos, out double cashValuesSum, out double ladderPrize, out bool minWinApplied)
+        private static List<int> SelectUniquePositions(int poolSize, int count, IRng rng)
         {
-            int totalSpins = _config.LockSlingoSpins[powerLevel];
-            bool[] gridLocked = new bool[25];
-            double[] gridValues = new double[25];
+            List<int> pool = Enumerable.Range(0, poolSize).ToList();
+            List<int> chosen = new List<int>();
 
-            for (int spin = 0; spin < totalSpins; spin++)
+            for (int i = 0; i < count && pool.Count > 0; i++)
             {
-                int emptyCount = 0;
-                for (int i = 0; i < 25; i++) if (!gridLocked[i]) emptyCount++;
-
-                if (emptyCount == 0) break; // Optimization: all spaces locked
-
-                // Find the landing weights for this emptyCount
-                int[]? landingWeights = null;
-                foreach (var lw in _config.LockSlingoLandingChanceWeights)
-                {
-                    if (emptyCount > lw.Threshold)
-                    {
-                        landingWeights = lw.Weights;
-                        break;
-                    }
-                }
-                if (landingWeights == null && _config.LockSlingoLandingChanceWeights.Count > 0)
-                {
-                    landingWeights = _config.LockSlingoLandingChanceWeights.Last().Weights;
-                }
-
-                int rolledIndex = ChooseWeightedIndex(landingWeights ?? new int[] { 0, 0, 0, 100 }, rng);
-                // rolledIndex: 0 = 3 Fire Cores, 1 = 2 Fire Cores, 2 = 1 Fire Core, 3 = Blank
-                int coresToLand = rolledIndex switch
-                {
-                    0 => 3,
-                    1 => 2,
-                    2 => 1,
-                    _ => 0
-                };
-
-                if (coresToLand > emptyCount) coresToLand = emptyCount;
-
-                if (coresToLand > 0)
-                {
-                    // Place coresToLand Fire Cores randomly in remaining empty spaces
-                    // Gather empty positions
-                    var emptyPositions = new List<int>();
-                    for (int i = 0; i < 25; i++)
-                    {
-                        if (!gridLocked[i]) emptyPositions.Add(i);
-                    }
-
-                    // Randomly select coresToLand positions
-                    for (int c = 0; c < coresToLand; c++)
-                    {
-                        int idx = rng.Next(emptyPositions.Count);
-                        int pos = emptyPositions[idx];
-                        emptyPositions.RemoveAt(idx);
-
-                        gridLocked[pos] = true;
-                        // Draw cash value
-                        int chosenValIndex = ChooseWeightedIndex(_config.LockSlingoFireCoreWeights, rng);
-                        double val = _config.LockSlingoFireCoreValues[chosenValIndex];
-                        gridValues[pos] = val;
-                    }
-                }
+                int idx = rng.Next(pool.Count);
+                chosen.Add(pool[idx]);
+                pool.RemoveAt(idx);
             }
 
-            // Calculate winnings
-            cashValuesSum = gridValues.Sum();
-
-            // Evaluate completed Slingo lines
-            completedSlingos = CountSlingos(gridLocked);
-
-            // Determine Slingo ladder prize
-            ladderPrize = GetSlingoLadderPrize(completedSlingos);
-
-            double totalBonusMultiplier = cashValuesSum + ladderPrize;
-
-            // Apply Guaranteed Bonus Minimum if baseGameStageIndex >= 5
-            minWinApplied = false;
-            if (_stageIndex >= 5)
-            {
-                double minWin = _config.LockSlingoBonusMinimums[powerLevel];
-                if (totalBonusMultiplier < minWin)
-                {
-                    totalBonusMultiplier = minWin;
-                    minWinApplied = true;
-                }
-            }
-
-            return (long)Math.Round(totalBonusMultiplier * 100.0);
-        }
-
-        private int CountSlingos(bool[] gridLocked)
-        {
-            int completed = 0;
-
-            // Horizontal lines
-            if (gridLocked[0] && gridLocked[1] && gridLocked[2] && gridLocked[3] && gridLocked[4]) completed++;
-            if (gridLocked[5] && gridLocked[6] && gridLocked[7] && gridLocked[8] && gridLocked[9]) completed++;
-            if (gridLocked[10] && gridLocked[11] && gridLocked[12] && gridLocked[13] && gridLocked[14]) completed++;
-            if (gridLocked[15] && gridLocked[16] && gridLocked[17] && gridLocked[18] && gridLocked[19]) completed++;
-            if (gridLocked[20] && gridLocked[21] && gridLocked[22] && gridLocked[23] && gridLocked[24]) completed++;
-
-            // Vertical lines
-            if (gridLocked[0] && gridLocked[5] && gridLocked[10] && gridLocked[15] && gridLocked[20]) completed++;
-            if (gridLocked[1] && gridLocked[6] && gridLocked[11] && gridLocked[16] && gridLocked[21]) completed++;
-            if (gridLocked[2] && gridLocked[7] && gridLocked[12] && gridLocked[17] && gridLocked[22]) completed++;
-            if (gridLocked[3] && gridLocked[8] && gridLocked[13] && gridLocked[18] && gridLocked[23]) completed++;
-            if (gridLocked[4] && gridLocked[9] && gridLocked[14] && gridLocked[19] && gridLocked[24]) completed++;
-
-            // Diagonal lines
-            if (gridLocked[0] && gridLocked[6] && gridLocked[12] && gridLocked[18] && gridLocked[24]) completed++;
-            if (gridLocked[4] && gridLocked[8] && gridLocked[12] && gridLocked[16] && gridLocked[20]) completed++;
-
-            return completed;
-        }
-
-        private double GetSlingoLadderPrize(int completedSlingos)
-        {
-            if (completedSlingos <= 0) return 0.0;
-            
-            double prize = 0.0;
-            for (int i = 0; i < _config.LockSlingoLadderLines.Length; i++)
-            {
-                if (completedSlingos >= _config.LockSlingoLadderLines[i])
-                {
-                    prize = _config.LockSlingoLadderPrizes[i];
-                }
-            }
-            return prize;
-        }
-
-        private long RunPrimalZoneBonus(int powerLevel, IRng rng, out int totalBananasCollected, out int finalStage, out int finalSize, out bool minWinApplied)
-        {
-            int totalSpins = _config.PrimalZoneSpins.Length > powerLevel ? _config.PrimalZoneSpins[powerLevel] : 5;
-            long totalBonusWinInCents = 0;
-            totalBananasCollected = 0;
-
-            int currentStage = 0; // 0 = 2x2, 1 = 3x3, 2 = 4x4, 3 = 5x5
-            int currentSize = _config.PrimalZoneStageSizes.Length > currentStage ? _config.PrimalZoneStageSizes[currentStage] : 2;
-            int pzRow = 0; // Top-left row (0..4)
-            int pzCol = 0; // Top-left col (0..4)
-            int bananasInCurrentStage = 0;
-
-            for (int spin = 0; spin < totalSpins; spin++)
-            {
-                // 1. Determine landing counts for Fire Cores and Bananas
-                int[] fireCoreWeights = GetLandingWeights(currentSize, _config.PrimalZoneFireCoreLandingChanceWeights);
-                int numFireCores = ChooseLandingCount(fireCoreWeights, rng);
-
-                int[] bananaWeights = GetLandingWeights(currentSize, _config.PrimalZoneBananaLandingChanceWeights);
-                int numBananas = ChooseLandingCount(bananaWeights, rng);
-
-                // 2. Select unique grid positions out of 25 grid cells
-                int totalItems = Math.Min(25, numFireCores + numBananas);
-                List<int> positions = SelectUniquePositions(25, totalItems, rng);
-
-                int actualCores = Math.Min(numFireCores, positions.Count);
-                int actualBananas = Math.Min(numBananas, positions.Count - actualCores);
-
-                List<int> corePositions = positions.Take(actualCores).ToList();
-                List<int> bananaPositions = positions.Skip(actualCores).Take(actualBananas).ToList();
-
-                // 3. Assign cash values to each landed item
-                Dictionary<int, long> coreValues = new();
-                foreach (int pos in corePositions)
-                {
-                    int valIdx = ChooseWeightedIndex(_config.PrimalZoneFireCoreWeights, rng);
-                    double valMultiplier = _config.PrimalZoneFireCoreValues[valIdx];
-                    coreValues[pos] = (long)Math.Round(valMultiplier * 100.0);
-                }
-
-                Dictionary<int, long> bananaValues = new();
-                foreach (int pos in bananaPositions)
-                {
-                    int valIdx = ChooseWeightedIndex(_config.PrimalZoneBananaWeights, rng);
-                    double valMultiplier = _config.PrimalZoneBananaValues[valIdx];
-                    bananaValues[pos] = (long)Math.Round(valMultiplier * 100.0);
-                }
-
-                bool IsCovered(int pos, int r, int c, int size)
-                {
-                    int itemRow = pos / 5;
-                    int itemCol = pos % 5;
-                    return itemRow >= r && itemRow < r + size && itemCol >= c && itemCol < c + size;
-                }
-
-                // 4. Award initial Fire Cores inside Primal Zone
-                foreach (int pos in corePositions)
-                {
-                    if (IsCovered(pos, pzRow, pzCol, currentSize))
-                    {
-                        totalBonusWinInCents += coreValues[pos];
-                    }
-                }
-
-                // 5. Process Bananas
-                List<int> remainingBananas = new List<int>();
-                foreach (int pos in bananaPositions)
-                {
-                    if (IsCovered(pos, pzRow, pzCol, currentSize))
-                    {
-                        totalBonusWinInCents += bananaValues[pos];
-                        totalBananasCollected++;
-                        bananasInCurrentStage++;
-
-                        CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
-                    }
-                    else
-                    {
-                        remainingBananas.Add(pos);
-                    }
-                }
-
-                // Chase remaining uncollected Bananas
-                while (remainingBananas.Count > 0)
-                {
-                    int bestPos = -1;
-                    int minDistance = int.MaxValue;
-                    (int targetR, int targetC) bestTarget = (pzRow, pzCol);
-
-                    foreach (int bPos in remainingBananas)
-                    {
-                        int bRow = bPos / 5;
-                        int bCol = bPos % 5;
-
-                        int targetR = Math.Clamp(pzRow, bRow - currentSize + 1, bRow);
-                        int targetC = Math.Clamp(pzCol, bCol - currentSize + 1, bCol);
-                        targetR = Math.Clamp(targetR, 0, 5 - currentSize);
-                        targetC = Math.Clamp(targetC, 0, 5 - currentSize);
-
-                        int dist = Math.Abs(pzRow - targetR) + Math.Abs(pzCol - targetC);
-
-                        if (dist < minDistance)
-                        {
-                            minDistance = dist;
-                            bestPos = bPos;
-                            bestTarget = (targetR, targetC);
-                        }
-                        else if (dist == minDistance && bestPos != -1)
-                        {
-                            int curBRow = bestPos / 5;
-                            int curBCol = bestPos % 5;
-
-                            if (bRow < curBRow || (bRow == curBRow && bCol < curBCol))
-                            {
-                                bestPos = bPos;
-                                bestTarget = (targetR, targetC);
-                            }
-                        }
-                    }
-
-                    // Move step-by-step to bestTarget (Priority: UP -> DOWN -> LEFT -> RIGHT)
-                    while (pzRow != bestTarget.targetR || pzCol != bestTarget.targetC)
-                    {
-                        if (pzRow > bestTarget.targetR) pzRow--;
-                        else if (pzRow < bestTarget.targetR) pzRow++;
-                        else if (pzCol > bestTarget.targetC) pzCol--;
-                        else if (pzCol < bestTarget.targetC) pzCol++;
-
-                        pzRow = Math.Clamp(pzRow, 0, 5 - currentSize);
-                        pzCol = Math.Clamp(pzCol, 0, 5 - currentSize);
-                    }
-
-                    totalBonusWinInCents += bananaValues[bestPos];
-                    totalBananasCollected++;
-                    bananasInCurrentStage++;
-                    remainingBananas.Remove(bestPos);
-
-                    CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
-                }
-            }
-
-            // Guaranteed Bonus Minimum if stage >= 5
-            minWinApplied = false;
-            if (_stageIndex >= 5 && _config.PrimalZoneBonusMinimums.Length > powerLevel)
-            {
-                double minWinMultiplier = _config.PrimalZoneBonusMinimums[powerLevel];
-                long minWinInCents = (long)Math.Round(minWinMultiplier * 100.0);
-                if (totalBonusWinInCents < minWinInCents)
-                {
-                    totalBonusWinInCents = minWinInCents;
-                    minWinApplied = true;
-                }
-            }
-
-            finalStage = currentStage;
-            finalSize = currentSize;
-
-            return totalBonusWinInCents;
-        }
-
-        private void CheckAndAdvanceStage(ref int currentStage, ref int currentSize, ref int bananasInCurrentStage, ref int pzRow, ref int pzCol)
-        {
-            while (currentStage < 3)
-            {
-                int reqBananas = _config.PrimalZoneStageBananasRequired[currentStage];
-                if (reqBananas > 0 && bananasInCurrentStage >= reqBananas)
-                {
-                    bananasInCurrentStage -= reqBananas;
-                    currentStage++;
-                    currentSize = _config.PrimalZoneStageSizes[currentStage];
-
-                    pzRow = Math.Clamp(pzRow, 0, 5 - currentSize);
-                    pzCol = Math.Clamp(pzCol, 0, 5 - currentSize);
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-
-        private int[] GetLandingWeights(int currentSize, List<PotLandingWeight> landingChanceWeights)
-        {
-            foreach (var lw in landingChanceWeights)
-            {
-                if (lw.Threshold == currentSize)
-                {
-                    return lw.Weights;
-                }
-            }
-            return landingChanceWeights.Count > 0 ? landingChanceWeights[0].Weights : new int[] { 0, 0, 0, 100 };
-        }
-
-        private int ChooseLandingCount(int[] weights, IRng rng)
-        {
-            int rolledIndex = ChooseWeightedIndex(weights, rng);
-            return rolledIndex switch
-            {
-                0 => 3,
-                1 => 2,
-                2 => 1,
-                _ => 0
-            };
-        }
-
-        private List<int> SelectUniquePositions(int totalCells, int count, IRng rng)
-        {
-            List<int> available = Enumerable.Range(0, totalCells).ToList();
-            List<int> selected = new();
-            for (int i = 0; i < count && available.Count > 0; i++)
-            {
-                int idx = rng.Next(available.Count);
-                selected.Add(available[idx]);
-                available.RemoveAt(idx);
-            }
-            return selected;
+            return chosen;
         }
     }
 }
