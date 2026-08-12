@@ -17,6 +17,14 @@ public class SlotEngineTests
         {
             excelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", "FirePrimalElephant95.xlsx");
         }
+        if (!File.Exists(excelPath))
+        {
+            string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FirePrimalElephant95.xlsx");
+            if (File.Exists(downloadsPath))
+            {
+                excelPath = downloadsPath;
+            }
+        }
         return ExcelConfigLoader.Load(excelPath);
     }
 

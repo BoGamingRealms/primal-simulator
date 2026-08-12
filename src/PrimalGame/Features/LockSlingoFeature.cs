@@ -1,8 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using PrimalGame.Config;
 using SlotFramework.Interfaces;
+using SlotFramework.Utilities;
 
 namespace PrimalGame.Features;
 
@@ -18,32 +17,40 @@ public class LockSlingoFeature
     public long Run(int powerLevel, int stageIndex, IRng rng, out int completedSlingos, out double cashValuesSum, out double ladderPrize, out bool minWinApplied)
     {
         int totalSpins = _config.LockSlingoSpins[powerLevel];
-        bool[] gridLocked = new bool[25];
-        double[] gridValues = new double[25];
+        Span<bool> gridLocked = stackalloc bool[25];
+        Span<double> gridValues = stackalloc double[25];
+        Span<int> emptyPositions = stackalloc int[25];
 
         for (int spin = 0; spin < totalSpins; spin++)
         {
             int emptyCount = 0;
-            for (int i = 0; i < 25; i++) if (!gridLocked[i]) emptyCount++;
+            for (int i = 0; i < 25; i++)
+            {
+                if (!gridLocked[i])
+                {
+                    emptyPositions[emptyCount++] = i;
+                }
+            }
 
             if (emptyCount == 0) break; // Optimization: all spaces locked
 
-            // Find landing weights for this emptyCount
-            int[]? landingWeights = null;
-            foreach (var lw in _config.LockSlingoLandingChanceWeights)
+            // Find landing weight table for this emptyCount
+            WeightTable? landingTable = null;
+            var fastLanding = _config.FastLockSlingoLandingChanceWeights;
+            for (int i = 0; i < fastLanding.Count; i++)
             {
-                if (emptyCount > lw.Threshold)
+                if (emptyCount > fastLanding[i].Threshold)
                 {
-                    landingWeights = lw.Weights;
+                    landingTable = fastLanding[i].Table;
                     break;
                 }
             }
-            if (landingWeights == null && _config.LockSlingoLandingChanceWeights.Count > 0)
+            if (landingTable == null && fastLanding.Count > 0)
             {
-                landingWeights = _config.LockSlingoLandingChanceWeights.Last().Weights;
+                landingTable = fastLanding[^1].Table;
             }
 
-            int rolledIndex = ChooseWeightedIndex(landingWeights ?? new int[] { 0, 0, 0, 100 }, rng);
+            int rolledIndex = landingTable != null ? landingTable.Sample(rng) : 3;
             int coresToLand = rolledIndex switch
             {
                 0 => 3,
@@ -56,27 +63,30 @@ public class LockSlingoFeature
 
             if (coresToLand > 0)
             {
-                var emptyPositions = new List<int>();
-                for (int i = 0; i < 25; i++)
-                {
-                    if (!gridLocked[i]) emptyPositions.Add(i);
-                }
-
                 for (int c = 0; c < coresToLand; c++)
                 {
-                    int idx = rng.Next(emptyPositions.Count);
+                    int remainingEmpty = emptyCount - c;
+                    int idx = rng.Next(remainingEmpty);
                     int pos = emptyPositions[idx];
-                    emptyPositions.RemoveAt(idx);
+                    
+                    // Fast swap remove
+                    emptyPositions[idx] = emptyPositions[remainingEmpty - 1];
 
                     gridLocked[pos] = true;
-                    int chosenValIndex = ChooseWeightedIndex(_config.LockSlingoFireCoreWeights, rng);
+                    int chosenValIndex = _config.FastLockSlingoFireCoreWeights.Sample(rng);
                     double val = _config.LockSlingoFireCoreValues[chosenValIndex];
                     gridValues[pos] = val;
                 }
             }
         }
 
-        cashValuesSum = gridValues.Sum();
+        double sum = 0.0;
+        for (int i = 0; i < 25; i++)
+        {
+            sum += gridValues[i];
+        }
+        cashValuesSum = sum;
+
         completedSlingos = CountSlingos(gridLocked);
         ladderPrize = GetSlingoLadderPrize(completedSlingos);
 
@@ -96,7 +106,7 @@ public class LockSlingoFeature
         return (long)Math.Round(totalBonusMultiplier * 100.0);
     }
 
-    private static int CountSlingos(bool[] gridLocked)
+    private static int CountSlingos(ReadOnlySpan<bool> gridLocked)
     {
         int completed = 0;
 
@@ -134,21 +144,5 @@ public class LockSlingoFeature
             }
         }
         return prize;
-    }
-
-    private static int ChooseWeightedIndex(int[] weights, IRng rng)
-    {
-        int totalWeight = 0;
-        for (int i = 0; i < weights.Length; i++) totalWeight += weights[i];
-        if (totalWeight <= 0) return 0;
-        
-        int r = rng.Next(totalWeight);
-        int sum = 0;
-        for (int i = 0; i < weights.Length; i++)
-        {
-            sum += weights[i];
-            if (r < sum) return i;
-        }
-        return 0;
     }
 }

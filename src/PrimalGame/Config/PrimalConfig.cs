@@ -104,10 +104,24 @@ public class PrimalConfig
     public int[] StampedePotCountWeights { get; set; } = Array.Empty<int>();
     public int[] StampedePotTypeWeights { get; set; } = Array.Empty<int>();
 
-    // Pre-allocated arrays for ultra-fast lookup during simulation
+    // Pre-allocated arrays and weight tables for ultra-fast simulation
     public long[][] FastPaytable { get; private set; } = Array.Empty<long[]>();
     public bool[] FastIsWild { get; private set; } = Array.Empty<bool>();
     public bool[] FastIsScatter { get; private set; } = Array.Empty<bool>();
+    public Dictionary<string, SlotFramework.Utilities.WeightTable> FastBaseGameStageWeights { get; private set; } = new();
+    public SlotFramework.Utilities.WeightTable FastFireCoreCashSpecial { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastFireCoreCashDefault { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastJackpotWeights { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastStampedePotCountWeights { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastStampedePotTypeWeights { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastLockSlingoFireCoreWeights { get; private set; } = new(Array.Empty<int>());
+    public List<(int Threshold, SlotFramework.Utilities.WeightTable Table)> FastLockSlingoLandingChanceWeights { get; private set; } = new();
+    public SlotFramework.Utilities.WeightTable FastApexSpinsReelsetWeights { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastColossalSpinsReelsetWeights { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastPrimalZoneFireCoreWeights { get; private set; } = new(Array.Empty<int>());
+    public SlotFramework.Utilities.WeightTable FastPrimalZoneBananaWeights { get; private set; } = new(Array.Empty<int>());
+    public List<(int Threshold, SlotFramework.Utilities.WeightTable Table)> FastPrimalZoneFireCoreLandingChanceWeights { get; private set; } = new();
+    public List<(int Threshold, SlotFramework.Utilities.WeightTable Table)> FastPrimalZoneBananaLandingChanceWeights { get; private set; } = new();
 
     public void PrepareForSimulation()
     {
@@ -134,7 +148,45 @@ public class PrimalConfig
             for (int match = 0; match <= 5; match++)
             {
                 FastPaytable[sym.Id][match] = Paytable.GetPayout(sym.Id, match);
+                FastPaytableMatrix[sym.Id, match] = Paytable.GetPayout(sym.Id, match);
             }
+        }
+
+        // Initialize fast weight tables
+        FastBaseGameStageWeights = new();
+        foreach (var kvp in BaseGameStageWeights)
+        {
+            FastBaseGameStageWeights[kvp.Key] = new SlotFramework.Utilities.WeightTable(kvp.Value);
+        }
+
+        FastFireCoreCashSpecial = new SlotFramework.Utilities.WeightTable(FireCoreCashWeightsSpecial);
+        FastFireCoreCashDefault = new SlotFramework.Utilities.WeightTable(FireCoreCashWeightsDefault);
+        FastJackpotWeights = new SlotFramework.Utilities.WeightTable(JackpotWeights);
+        FastStampedePotCountWeights = new SlotFramework.Utilities.WeightTable(StampedePotCountWeights);
+        FastStampedePotTypeWeights = new SlotFramework.Utilities.WeightTable(StampedePotTypeWeights);
+        FastLockSlingoFireCoreWeights = new SlotFramework.Utilities.WeightTable(LockSlingoFireCoreWeights);
+        
+        FastLockSlingoLandingChanceWeights = new();
+        foreach (var lw in LockSlingoLandingChanceWeights)
+        {
+            FastLockSlingoLandingChanceWeights.Add((lw.Threshold, new SlotFramework.Utilities.WeightTable(lw.Weights)));
+        }
+
+        FastApexSpinsReelsetWeights = new SlotFramework.Utilities.WeightTable(ApexSpinsReelsetWeights);
+        FastColossalSpinsReelsetWeights = new SlotFramework.Utilities.WeightTable(ColossalSpinsReelsetWeights);
+        FastPrimalZoneFireCoreWeights = new SlotFramework.Utilities.WeightTable(PrimalZoneFireCoreWeights);
+        FastPrimalZoneBananaWeights = new SlotFramework.Utilities.WeightTable(PrimalZoneBananaWeights);
+
+        FastPrimalZoneFireCoreLandingChanceWeights = new();
+        foreach (var lw in PrimalZoneFireCoreLandingChanceWeights)
+        {
+            FastPrimalZoneFireCoreLandingChanceWeights.Add((lw.Threshold, new SlotFramework.Utilities.WeightTable(lw.Weights)));
+        }
+
+        FastPrimalZoneBananaLandingChanceWeights = new();
+        foreach (var lw in PrimalZoneBananaLandingChanceWeights)
+        {
+            FastPrimalZoneBananaLandingChanceWeights.Add((lw.Threshold, new SlotFramework.Utilities.WeightTable(lw.Weights)));
         }
     }
 }

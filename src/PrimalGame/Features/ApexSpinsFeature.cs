@@ -20,15 +20,20 @@ public class ApexSpinsFeature
         double topSpinAwardMultiplier = _config.ApexSpinsTopAwardMultipliers[powerLevel];
         long topSpinAwardInCents = (long)Math.Round(topSpinAwardMultiplier * 100.0);
 
-        bool[,] lockedWilds = new bool[5, 3];
+        Span<bool> lockedWilds = stackalloc bool[15];
         spinsPlayed = 0;
         long totalBonusWinInCents = 0;
+
+        int[][] screenSymbols = new int[5][]
+        {
+            new int[3], new int[3], new int[3], new int[3], new int[3]
+        };
 
         while (true)
         {
             spinsPlayed++;
 
-            int chosenIdx = ChooseWeightedIndex(_config.ApexSpinsReelsetWeights, rng);
+            int chosenIdx = _config.FastApexSpinsReelsetWeights.Sample(rng);
             string reelsetName = $"Reelset{chosenIdx}";
 
             if (!_config.ApexSpinsReelsets.TryGetValue(reelsetName, out var reelset))
@@ -36,10 +41,8 @@ public class ApexSpinsFeature
                 reelset = _config.ApexSpinsReelsets.Values.FirstOrDefault() ?? _config.BaseReels;
             }
 
-            int[][] screenSymbols = new int[5][];
             for (int r = 0; r < 5; r++)
             {
-                screenSymbols[r] = new int[3];
                 var strip = reelset.Reels[r];
                 int stopIndex = rng.Next(strip.Length);
                 screenSymbols[r][0] = reelset.GetSymbolAt(r, stopIndex, 0);
@@ -51,13 +54,14 @@ public class ApexSpinsFeature
             {
                 for (int row = 0; row < 3; row++)
                 {
-                    if (lockedWilds[r, row])
+                    int pos = r * 3 + row;
+                    if (lockedWilds[pos])
                     {
                         screenSymbols[r][row] = _config.WildSymbolId;
                     }
                     else if (screenSymbols[r][row] == _config.WildSymbolId)
                     {
-                        lockedWilds[r, row] = true;
+                        lockedWilds[pos] = true;
                     }
                 }
             }
@@ -84,21 +88,5 @@ public class ApexSpinsFeature
         }
 
         return totalBonusWinInCents;
-    }
-
-    private static int ChooseWeightedIndex(int[] weights, IRng rng)
-    {
-        int totalWeight = 0;
-        for (int i = 0; i < weights.Length; i++) totalWeight += weights[i];
-        if (totalWeight <= 0) return 0;
-        
-        int r = rng.Next(totalWeight);
-        int sum = 0;
-        for (int i = 0; i < weights.Length; i++)
-        {
-            sum += weights[i];
-            if (r < sum) return i;
-        }
-        return 0;
     }
 }

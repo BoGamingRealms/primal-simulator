@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using SlotFramework.Interfaces;
 using SlotFramework.Models;
+using SlotFramework.Utilities;
 using PrimalGame.Config;
 using PrimalGame.Features;
 
@@ -85,15 +86,14 @@ namespace PrimalGame
 
             // 2. Select Reelset based on Stage Weights
             int chosenReelsetIndex = 0;
-            if (_config.BaseGameStageWeights.TryGetValue(_currentStage, out var weights))
+            if (_config.FastBaseGameStageWeights.TryGetValue(_currentStage, out var weightTable))
             {
-                chosenReelsetIndex = ChooseWeightedIndex(weights, rng);
+                chosenReelsetIndex = weightTable.Sample(rng);
             }
             string reelsetName = $"Reelset{chosenReelsetIndex}";
             
             if (!_config.Reelsets.TryGetValue(reelsetName, out var reelset))
             {
-                // Fallback to Reelset0 if not found
                 reelset = _config.Reelsets.Values.FirstOrDefault() ?? new ReelSet();
             }
 
@@ -124,19 +124,21 @@ namespace PrimalGame
             {
                 spinResult.IsStampedeSpin = true;
 
-                if (_config.StampedePotCountWeights.Length > 0 && _config.StampedePotCounts.Length > 0)
+                if (_config.StampedePotCounts.Length > 0 && _config.FastStampedePotCountWeights.TotalWeight > 0)
                 {
-                    int kIdx = ChooseWeightedIndex(_config.StampedePotCountWeights, rng);
+                    int kIdx = _config.FastStampedePotCountWeights.Sample(rng);
                     int potsToAdd = _config.StampedePotCounts[Math.Min(kIdx, _config.StampedePotCounts.Length - 1)];
                     spinResult.StampedeAddedPotCount = potsToAdd;
 
-                    List<int> positions = SelectUniquePositions(15, potsToAdd, rng);
-                    foreach (int pos in positions)
+                    Span<int> positions = stackalloc int[15];
+                    SelectUniquePositions(15, potsToAdd, rng, positions);
+                    for (int i = 0; i < potsToAdd && i < 15; i++)
                     {
+                        int pos = positions[i];
                         int r = pos / 3;
                         int row = pos % 3;
 
-                        int potTypeIdx = ChooseWeightedIndex(_config.StampedePotTypeWeights, rng);
+                        int potTypeIdx = _config.FastStampedePotTypeWeights.Sample(rng);
                         int symbolId = 10 + Math.Clamp(potTypeIdx, 0, 3);
                         spinResult.ScreenSymbols[r][row] = symbolId;
                     }
@@ -157,8 +159,7 @@ namespace PrimalGame
 
         public SpinResult FreeSpin(IRng rng, int currentFreeSpinIndex, int totalFreeSpins)
         {
-            // Free spins fallback to Stage6 reelset or first available reelset for simplicity
-            string reelsetName = "Reelset19"; // often a higher-paying reelset in stage weights
+            string reelsetName = "Reelset19";
             if (!_config.Reelsets.TryGetValue(reelsetName, out var reelset))
             {
                 reelset = _config.Reelsets.Values.FirstOrDefault() ?? new ReelSet();
@@ -187,7 +188,6 @@ namespace PrimalGame
             EvaluateLineWins(spinResult);
             spinResult.TotalWin *= _config.FreeSpinsMultiplier;
 
-            // Evaluate Jackpot Trigger Collections in Free Spins (without fs multiplier applying to it)
             EvaluateCollections(spinResult, rng);
 
             return spinResult;
@@ -195,17 +195,21 @@ namespace PrimalGame
 
         private void EvaluateLineWins(SpinResult spinResult)
         {
-            for (int lineId = 0; lineId < _config.Paylines.Length; lineId++)
+            var fastPaytable = _config.FastPaytable;
+            var wildId = _config.WildSymbolId;
+            var paylines = _config.Paylines;
+            var symbols = _config.Symbols;
+
+            for (int lineId = 0; lineId < paylines.Length; lineId++)
             {
-                var payline = _config.Paylines[lineId];
+                var payline = paylines[lineId];
                 long maxPayout = 0;
                 int bestSymId = -1;
                 int bestMatchCount = 0;
 
-                // Evaluate each possible paying symbol
-                foreach (var sym in _config.Symbols)
+                for (int s = 0; s < symbols.Count; s++)
                 {
-                    // Skip Wild, Scatter, and trigger symbols which do not have line payouts
+                    var sym = symbols[s];
                     if (sym.IsWild || sym.IsScatter || sym.Id >= 9) continue;
 
                     int matchCount = 0;
@@ -214,7 +218,7 @@ namespace PrimalGame
                         int rowIndex = payline[reel];
                         int screenSym = spinResult.ScreenSymbols[reel][rowIndex];
 
-                        if (screenSym == sym.Id || screenSym == _config.WildSymbolId)
+                        if (screenSym == sym.Id || screenSym == wildId)
                         {
                             matchCount++;
                         }
@@ -224,7 +228,7 @@ namespace PrimalGame
                         }
                     }
 
-                    long payout = _config.Paytable.GetPayout(sym.Id, matchCount);
+                    long payout = fastPaytable[sym.Id][matchCount];
                     if (payout > maxPayout)
                     {
                         maxPayout = payout;
@@ -237,7 +241,7 @@ namespace PrimalGame
                 {
                     spinResult.LineWins.Add(new LineWin
                     {
-                        LineId = lineId + 1, // 1-indexed for presentation
+                        LineId = lineId + 1,
                         SymbolId = bestSymId,
                         MatchCount = bestMatchCount,
                         Payout = maxPayout
@@ -285,26 +289,22 @@ namespace PrimalGame
 
             if (triggerCount > 0)
             {
-                // Select cash values and weights:
-                // Col B (Special) is used on Reelsets 8, 9, 10
-                // Col C (Default) is used for all other reelsets
                 bool isSpecialReelset = (reelsetIndex == 8 || reelsetIndex == 9 || reelsetIndex == 10);
 
                 double[] cashValues = isSpecialReelset
                     ? (_config.FireCoreCashValuesSpecial.Length > 0 ? _config.FireCoreCashValuesSpecial : _config.FireCoreCashValues)
                     : (_config.FireCoreCashValuesDefault.Length > 0 ? _config.FireCoreCashValuesDefault : _config.FireCoreCashValues);
 
-                int[] cashWeights = isSpecialReelset
-                    ? (_config.FireCoreCashWeightsSpecial.Length > 0 ? _config.FireCoreCashWeightsSpecial : _config.FireCoreCashWeights)
-                    : (_config.FireCoreCashWeightsDefault.Length > 0 ? _config.FireCoreCashWeightsDefault : _config.FireCoreCashWeights);
+                WeightTable cashTable = isSpecialReelset
+                    ? (_config.FastFireCoreCashSpecial.TotalWeight > 0 ? _config.FastFireCoreCashSpecial : _config.FastFireCoreCashDefault)
+                    : (_config.FastFireCoreCashDefault.TotalWeight > 0 ? _config.FastFireCoreCashDefault : _config.FastFireCoreCashSpecial);
 
-                // Draw a cash value for each landed trigger
                 double sumMultipliers = 0.0;
                 for (int i = 0; i < triggerCount; i++)
                 {
-                    if (cashValues.Length > 0 && cashWeights.Length > 0)
+                    if (cashValues.Length > 0 && cashTable.TotalWeight > 0)
                     {
-                        int chosenValIndex = ChooseWeightedIndex(cashWeights, rng);
+                        int chosenValIndex = cashTable.Sample(rng);
                         sumMultipliers += cashValues[chosenValIndex];
                     }
                 }
@@ -320,21 +320,16 @@ namespace PrimalGame
                 }
                 else
                 {
-                    // No collector in view, but there are jackpot triggers!
-                    // Check if jackpot bonus is triggered.
-                    int jackpotBonusTriggerWeight = _config.JackpotBonusTriggerChanceWeight; // e.g. 2000
+                    int jackpotBonusTriggerWeight = _config.JackpotBonusTriggerChanceWeight;
                     if (jackpotBonusTriggerWeight > 0)
                     {
-                        // Total chance is triggerCount in jackpotBonusTriggerWeight.
                         if (rng.Next(jackpotBonusTriggerWeight) < triggerCount)
                         {
-                            // Trigger Jackpot Bonus!
                             spinResult.JackpotBonusTriggered = true;
                             
-                            // Spin the big wheel to win a jackpot!
-                            if (_config.JackpotWeights.Length > 0 && _config.JackpotNames.Length > 0)
+                            if (_config.JackpotNames.Length > 0 && _config.FastJackpotWeights.TotalWeight > 0)
                             {
-                                int chosenJackpotIndex = ChooseWeightedIndex(_config.JackpotWeights, rng);
+                                int chosenJackpotIndex = _config.FastJackpotWeights.Sample(rng);
                                 string jpName = _config.JackpotNames[chosenJackpotIndex];
                                 double jpMultiplier = _config.JackpotValues[chosenJackpotIndex];
                                 
@@ -352,25 +347,9 @@ namespace PrimalGame
             }
         }
 
-        private int ChooseWeightedIndex(int[] weights, IRng rng)
-        {
-            int totalWeight = 0;
-            for (int i = 0; i < weights.Length; i++) totalWeight += weights[i];
-            if (totalWeight <= 0) return 0;
-            
-            int r = rng.Next(totalWeight);
-            int sum = 0;
-            for (int i = 0; i < weights.Length; i++)
-            {
-                sum += weights[i];
-                if (r < sum) return i;
-            }
-            return 0;
-        }
-
         private void EvaluatePots(SpinResult spinResult, IRng rng)
         {
-            spinResult.PotPowersBefore = _potPowers.ToArray();
+            spinResult.PotPowersBefore = (int[])_potPowers.Clone();
 
             for (int p = 0; p < 4; p++)
             {
@@ -397,7 +376,6 @@ namespace PrimalGame
                         int chanceWeight = _config.LockSlingoTriggerWeights[currentPower];
                         if (rng.Next(chanceWeight) < count)
                         {
-                            // Triggered! Power increases by N - 1
                             int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
                             long bonusWin = RunLockSlingoBonus(triggeredPower, rng, out int completedSlingos, out double cashSum, out double ladderPrize, out bool minWinApplied);
                             
@@ -420,7 +398,6 @@ namespace PrimalGame
                         }
                         else
                         {
-                            // Not triggered, increase power by count
                             _potPowers[0] = Math.Min(maxPower, currentPower + count);
                         }
                     }
@@ -432,7 +409,6 @@ namespace PrimalGame
                         int chanceWeight = _config.ApexSpinsTriggerWeights[currentPower];
                         if (rng.Next(chanceWeight) < count)
                         {
-                            // Triggered! Power increases by N - 1
                             int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
                             long bonusWin = RunApexSpinsBonus(triggeredPower, rng, out int spinsPlayed, out bool minWinApplied);
 
@@ -453,7 +429,6 @@ namespace PrimalGame
                         }
                         else
                         {
-                            // Not triggered, increase power by count
                             _potPowers[1] = Math.Min(maxPower, currentPower + count);
                         }
                     }
@@ -465,7 +440,6 @@ namespace PrimalGame
                         int chanceWeight = _config.ColossalSpinsTriggerWeights[currentPower];
                         if (rng.Next(chanceWeight) < count)
                         {
-                            // Triggered! Power increases by N - 1
                             int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
                             long bonusWin = RunColossalSpinsBonus(triggeredPower, rng, out int spinsPlayed, out bool minWinApplied, out var symbolWins, out var symbolHits);
 
@@ -488,7 +462,6 @@ namespace PrimalGame
                         }
                         else
                         {
-                            // Not triggered, increase power by count
                             _potPowers[2] = Math.Min(maxPower, currentPower + count);
                         }
                     }
@@ -500,7 +473,6 @@ namespace PrimalGame
                         int chanceWeight = (currentPower >= 0 && currentPower < _config.PrimalZoneTriggerWeights.Length) ? _config.PrimalZoneTriggerWeights[currentPower] : 0;
                         if (chanceWeight > 0 && rng.Next(chanceWeight) < count)
                         {
-                            // Triggered! Power increases by N - 1
                             int triggeredPower = Math.Min(maxPower, currentPower + (count - 1));
                             long bonusWin = RunPrimalZoneBonus(triggeredPower, rng, out int totalBananas, out int finalStage, out int finalSize, out bool minWinApplied);
 
@@ -524,14 +496,13 @@ namespace PrimalGame
                         }
                         else
                         {
-                            // Not triggered, increase power by count
                             _potPowers[3] = Math.Min(maxPower, currentPower + count);
                         }
                     }
                 }
             }
 
-            spinResult.PotPowersAfter = _potPowers.ToArray();
+            spinResult.PotPowersAfter = (int[])_potPowers.Clone();
         }
 
         private long RunApexSpinsBonus(int powerLevel, IRng rng, out int spinsPlayed, out bool minWinApplied)
@@ -556,14 +527,20 @@ namespace PrimalGame
 
         private long EvaluateGridLineWins(int[][] screenSymbols)
         {
+            var fastPaytable = _config.FastPaytable;
+            var wildId = _config.WildSymbolId;
+            var paylines = _config.Paylines;
+            var symbols = _config.Symbols;
             long totalWin = 0;
-            for (int lineId = 0; lineId < _config.Paylines.Length; lineId++)
+
+            for (int lineId = 0; lineId < paylines.Length; lineId++)
             {
-                var payline = _config.Paylines[lineId];
+                var payline = paylines[lineId];
                 long maxPayout = 0;
 
-                foreach (var sym in _config.Symbols)
+                for (int s = 0; s < symbols.Count; s++)
                 {
+                    var sym = symbols[s];
                     if (sym.IsWild || sym.IsScatter || sym.Id >= 9) continue;
 
                     int matchCount = 0;
@@ -572,7 +549,7 @@ namespace PrimalGame
                         int rowIndex = payline[reel];
                         int screenSym = screenSymbols[reel][rowIndex];
 
-                        if (screenSym == sym.Id || screenSym == _config.WildSymbolId)
+                        if (screenSym == sym.Id || screenSym == wildId)
                         {
                             matchCount++;
                         }
@@ -582,7 +559,7 @@ namespace PrimalGame
                         }
                     }
 
-                    long payout = _config.FastPaytableMatrix[sym.Id, matchCount];
+                    long payout = fastPaytable[sym.Id][matchCount];
                     if (payout > maxPayout)
                     {
                         maxPayout = payout;
@@ -594,19 +571,16 @@ namespace PrimalGame
             return totalWin;
         }
 
-        private static List<int> SelectUniquePositions(int poolSize, int count, IRng rng)
+        private static void SelectUniquePositions(int poolSize, int count, IRng rng, Span<int> output)
         {
-            List<int> pool = Enumerable.Range(0, poolSize).ToList();
-            List<int> chosen = new List<int>();
-
-            for (int i = 0; i < count && pool.Count > 0; i++)
+            Span<int> pool = stackalloc int[poolSize];
+            for (int i = 0; i < poolSize; i++) pool[i] = i;
+            for (int i = 0; i < count && i < poolSize; i++)
             {
-                int idx = rng.Next(pool.Count);
-                chosen.Add(pool[idx]);
-                pool.RemoveAt(idx);
+                int j = i + rng.Next(poolSize - i);
+                (pool[i], pool[j]) = (pool[j], pool[i]);
+                output[i] = pool[i];
             }
-
-            return chosen;
         }
     }
 }

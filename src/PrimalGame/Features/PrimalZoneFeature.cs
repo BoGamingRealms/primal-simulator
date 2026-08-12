@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using PrimalGame.Config;
 using SlotFramework.Interfaces;
+using SlotFramework.Utilities;
 
 namespace PrimalGame.Features;
 
@@ -27,35 +27,40 @@ public class PrimalZoneFeature
         int pzCol = 0; // Top-left col (0..4)
         int bananasInCurrentStage = 0;
 
+        Span<int> positions = stackalloc int[25];
+        Span<long> coreValues = stackalloc long[25];
+        Span<long> bananaValues = stackalloc long[25];
+        Span<int> remainingBananas = stackalloc int[25];
+
         for (int spin = 0; spin < totalSpins; spin++)
         {
-            int[] fireCoreWeights = GetLandingWeights(currentSize, _config.PrimalZoneFireCoreLandingChanceWeights);
-            int numFireCores = ChooseLandingCount(fireCoreWeights, rng);
+            var fireCoreTable = GetLandingTable(currentSize, _config.FastPrimalZoneFireCoreLandingChanceWeights);
+            int numFireCores = fireCoreTable != null ? fireCoreTable.Sample(rng) : 0;
 
-            int[] bananaWeights = GetLandingWeights(currentSize, _config.PrimalZoneBananaLandingChanceWeights);
-            int numBananas = ChooseLandingCount(bananaWeights, rng);
+            var bananaTable = GetLandingTable(currentSize, _config.FastPrimalZoneBananaLandingChanceWeights);
+            int numBananas = bananaTable != null ? bananaTable.Sample(rng) : 0;
 
             int totalItems = Math.Min(25, numFireCores + numBananas);
-            List<int> positions = SelectUniquePositions(25, totalItems, rng);
+            SelectUniquePositions(25, totalItems, rng, positions);
 
-            int actualCores = Math.Min(numFireCores, positions.Count);
-            int actualBananas = Math.Min(numBananas, positions.Count - actualCores);
+            int actualCores = Math.Min(numFireCores, totalItems);
+            int actualBananas = Math.Min(numBananas, totalItems - actualCores);
 
-            List<int> corePositions = positions.Take(actualCores).ToList();
-            List<int> bananaPositions = positions.Skip(actualCores).Take(actualBananas).ToList();
+            coreValues.Clear();
+            bananaValues.Clear();
 
-            Dictionary<int, long> coreValues = new();
-            foreach (int pos in corePositions)
+            for (int i = 0; i < actualCores; i++)
             {
-                int valIdx = ChooseWeightedIndex(_config.PrimalZoneFireCoreWeights, rng);
+                int pos = positions[i];
+                int valIdx = _config.FastPrimalZoneFireCoreWeights.Sample(rng);
                 double valMultiplier = _config.PrimalZoneFireCoreValues[valIdx];
                 coreValues[pos] = (long)Math.Round(valMultiplier * 100.0);
             }
 
-            Dictionary<int, long> bananaValues = new();
-            foreach (int pos in bananaPositions)
+            for (int i = 0; i < actualBananas; i++)
             {
-                int valIdx = ChooseWeightedIndex(_config.PrimalZoneBananaWeights, rng);
+                int pos = positions[actualCores + i];
+                int valIdx = _config.FastPrimalZoneBananaWeights.Sample(rng);
                 double valMultiplier = _config.PrimalZoneBananaValues[valIdx];
                 bananaValues[pos] = (long)Math.Round(valMultiplier * 100.0);
             }
@@ -67,54 +72,70 @@ public class PrimalZoneFeature
                 return itemRow >= r && itemRow < r + size && itemCol >= c && itemCol < c + size;
             }
 
-            foreach (int pos in corePositions)
+            for (int i = 0; i < actualCores; i++)
             {
+                int pos = positions[i];
                 if (IsCovered(pos, pzRow, pzCol, currentSize))
                 {
                     totalBonusWinInCents += coreValues[pos];
                 }
             }
 
-            List<int> remainingBananas = new List<int>();
-            foreach (int pos in bananaPositions)
+            int remainingCount = 0;
+            for (int i = 0; i < actualBananas; i++)
             {
-                if (IsCovered(pos, pzRow, pzCol, currentSize))
-                {
-                    totalBonusWinInCents += bananaValues[pos];
-                    totalBananasCollected++;
-                    bananasInCurrentStage++;
-
-                    CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
-                }
-                else
-                {
-                    remainingBananas.Add(pos);
-                }
+                remainingBananas[remainingCount++] = positions[actualCores + i];
             }
 
-            while (remainingBananas.Count > 0)
+            while (remainingCount > 0)
             {
+                // 1. Collect any bananas covered by current zone
+                bool collectedAny = false;
+                for (int i = remainingCount - 1; i >= 0; i--)
+                {
+                    int bPos = remainingBananas[i];
+                    if (IsCovered(bPos, pzRow, pzCol, currentSize))
+                    {
+                        totalBonusWinInCents += bananaValues[bPos];
+                        totalBananasCollected++;
+                        bananasInCurrentStage++;
+
+                        remainingBananas[i] = remainingBananas[remainingCount - 1];
+                        remainingCount--;
+                        collectedAny = true;
+
+                        CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
+                    }
+                }
+
+                if (remainingCount == 0) break;
+                if (collectedAny) continue;
+
+                // 2. Select closest remaining banana
                 int bestPos = -1;
                 int minDistance = int.MaxValue;
-                (int targetR, int targetC) bestTarget = (pzRow, pzCol);
+                int targetR = pzRow;
+                int targetC = pzCol;
 
-                foreach (int bPos in remainingBananas)
+                for (int idx = 0; idx < remainingCount; idx++)
                 {
+                    int bPos = remainingBananas[idx];
                     int bRow = bPos / 5;
                     int bCol = bPos % 5;
 
-                    int targetR = Math.Clamp(pzRow, bRow - currentSize + 1, bRow);
-                    int targetC = Math.Clamp(pzCol, bCol - currentSize + 1, bCol);
-                    targetR = Math.Clamp(targetR, 0, 5 - currentSize);
-                    targetC = Math.Clamp(targetC, 0, 5 - currentSize);
+                    int tR = Math.Clamp(pzRow, bRow - currentSize + 1, bRow);
+                    int tC = Math.Clamp(pzCol, bCol - currentSize + 1, bCol);
+                    tR = Math.Clamp(tR, 0, 5 - currentSize);
+                    tC = Math.Clamp(tC, 0, 5 - currentSize);
 
-                    int dist = Math.Abs(pzRow - targetR) + Math.Abs(pzCol - targetC);
+                    int dist = Math.Abs(pzRow - tR) + Math.Abs(pzCol - tC);
 
                     if (dist < minDistance)
                     {
                         minDistance = dist;
                         bestPos = bPos;
-                        bestTarget = (targetR, targetC);
+                        targetR = tR;
+                        targetC = tC;
                     }
                     else if (dist == minDistance && bestPos != -1)
                     {
@@ -124,32 +145,17 @@ public class PrimalZoneFeature
                         if (bRow < curBRow || (bRow == curBRow && bCol < curBCol))
                         {
                             bestPos = bPos;
-                            bestTarget = (targetR, targetC);
+                            targetR = tR;
+                            targetC = tC;
                         }
                     }
                 }
 
-                while (pzRow != bestTarget.targetR || pzCol != bestTarget.targetC)
-                {
-                    if (pzRow > bestTarget.targetR) pzRow--;
-                    else if (pzRow < bestTarget.targetR) pzRow++;
-                    else if (pzCol > bestTarget.targetC) pzCol--;
-                    else if (pzCol < bestTarget.targetC) pzCol++;
-
-                    for (int i = remainingBananas.Count - 1; i >= 0; i--)
-                    {
-                        int bPos = remainingBananas[i];
-                        if (IsCovered(bPos, pzRow, pzCol, currentSize))
-                        {
-                            totalBonusWinInCents += bananaValues[bPos];
-                            totalBananasCollected++;
-                            bananasInCurrentStage++;
-                            remainingBananas.RemoveAt(i);
-
-                            CheckAndAdvanceStage(ref currentStage, ref currentSize, ref bananasInCurrentStage, ref pzRow, ref pzCol);
-                        }
-                    }
-                }
+                // 3. Step 1 unit towards target
+                if (pzRow > targetR) pzRow--;
+                else if (pzRow < targetR) pzRow++;
+                else if (pzCol > targetC) pzCol--;
+                else if (pzCol < targetC) pzCol++;
             }
         }
 
@@ -188,52 +194,24 @@ public class PrimalZoneFeature
         }
     }
 
-    private static int[] GetLandingWeights(int zoneSize, List<PotLandingWeight> chanceWeights)
+    private static WeightTable? GetLandingTable(int zoneSize, List<(int Threshold, WeightTable Table)> list)
     {
-        foreach (var lw in chanceWeights)
+        for (int i = 0; i < list.Count; i++)
         {
-            if (zoneSize == lw.Threshold)
-            {
-                return lw.Weights;
-            }
+            if (zoneSize == list[i].Threshold) return list[i].Table;
         }
-        return chanceWeights.FirstOrDefault()?.Weights ?? new int[] { 100, 0, 0, 0 };
+        return list.Count > 0 ? list[0].Table : null;
     }
 
-    private static int ChooseLandingCount(int[] weights, IRng rng)
+    private static void SelectUniquePositions(int poolSize, int count, IRng rng, Span<int> output)
     {
-        int idx = ChooseWeightedIndex(weights, rng);
-        return idx; // 0..3
-    }
-
-    private static List<int> SelectUniquePositions(int poolSize, int count, IRng rng)
-    {
-        List<int> pool = Enumerable.Range(0, poolSize).ToList();
-        List<int> chosen = new List<int>();
-
-        for (int i = 0; i < count && pool.Count > 0; i++)
+        Span<int> pool = stackalloc int[poolSize];
+        for (int i = 0; i < poolSize; i++) pool[i] = i;
+        for (int i = 0; i < count && i < poolSize; i++)
         {
-            int idx = rng.Next(pool.Count);
-            chosen.Add(pool[idx]);
-            pool.RemoveAt(idx);
+            int j = i + rng.Next(poolSize - i);
+            (pool[i], pool[j]) = (pool[j], pool[i]);
+            output[i] = pool[i];
         }
-
-        return chosen;
-    }
-
-    private static int ChooseWeightedIndex(int[] weights, IRng rng)
-    {
-        int totalWeight = 0;
-        for (int i = 0; i < weights.Length; i++) totalWeight += weights[i];
-        if (totalWeight <= 0) return 0;
-        
-        int r = rng.Next(totalWeight);
-        int sum = 0;
-        for (int i = 0; i < weights.Length; i++)
-        {
-            sum += weights[i];
-            if (r < sum) return i;
-        }
-        return 0;
     }
 }

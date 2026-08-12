@@ -115,29 +115,68 @@ try
     string modeName = trackFullStats ? "FULL STATS" : "BASIC STATS";
     Console.WriteLine($"\nGenerating real simulation results (1,000,000 spins, mode: {modeName})...");
     
-    var engine = new PrimalSlotEngine(config);
-    var rng = new FastRandom();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
     
+    int totalSpins = 1000000;
+    int workerCount = Math.Max(1, Environment.ProcessorCount);
+    int baseSpinsPerWorker = totalSpins / workerCount;
+    var workers = new SimWorkerStats[workerCount];
+
+    Parallel.For(0, workerCount, w =>
+    {
+        int spinsForThisWorker = (w == workerCount - 1)
+            ? baseSpinsPerWorker + (totalSpins - (baseSpinsPerWorker * workerCount))
+            : baseSpinsPerWorker;
+
+        var localEngine = new PrimalSlotEngine(config);
+        var localRng = new FastRandom((ulong)(123456789012345UL + (ulong)w * 9876543210987UL + (ulong)DateTime.UtcNow.Ticks));
+        var localStats = new SimWorkerStats(config);
+
+        for (int i = 0; i < spinsForThisWorker; i++)
+        {
+            var spinResult = localEngine.Spin(localRng);
+            localStats.Record(spinResult, config, trackFullStats);
+        }
+
+        workers[w] = localStats;
+    });
+
+    sw.Stop();
+    Console.WriteLine($"\nSimulation finished in {sw.ElapsedMilliseconds} ms ({totalSpins / (sw.Elapsed.TotalSeconds):N0} spins/sec across {workerCount} CPU threads)!");
+
+    // Merge all worker stats into aggregate counters
     long totalWin = 0;
     long totalLineWin = 0;
     long totalFeatureWin = 0;
     int winSpins = 0;
-    int totalSpins = 1000000;
-    
+    int totalPowerUpTriggers = 0;
+
     int spinsWithCollectorOnReel0Or4 = 0;
     int spinsWithFireCore = 0;
     int collectionTriggerSpins = 0;
-    int totalPowerUpTriggers = 0;
-    
+    int collectTriggersWith1Collector = 0;
+    int collectTriggersWith2Collectors = 0;
+    double totalCollectCashMultiplierSum = 0.0;
+    long totalCollectFireCoresCount = 0;
+    int spinsWithCollectorButNoFireCore = 0;
+    int spinsWithFireCoreButNoCollector = 0;
+
     int totalJackpotBonusTriggers = 0;
     long totalJackpotBonusWin = 0;
-    
-    // Pot progression statistics
+    long totalFireCoresOnJackpotTrigger = 0;
+    int[] jackpotTriggersByFireCoreCount = new int[16];
+    var jackpotHits = new Dictionary<string, int>();
+    var jackpotWins = new Dictionary<string, long>();
+    foreach (var jpName in config.JackpotNames)
+    {
+        jackpotHits[jpName] = 0;
+        jackpotWins[jpName] = 0;
+    }
+
     int[] spinsWithPotTrigger = new int[4];
     int[] totalPotTriggers = new int[4];
     long[] totalPotTriggerPowers = new long[4];
-    
-    // Detailed stats for Lock & Slingo (Bonus 1)
+
     int totalLockSlingoTriggers = 0;
     long totalLockSlingoWin = 0;
     long totalLockSlingoSlingosCompleted = 0;
@@ -147,7 +186,6 @@ try
     long totalLockSlingoSpinsAwarded = 0;
     int[] lockSlingoTriggersByPower = new int[config.LockSlingoSpins.Length];
 
-    // Detailed stats for Apex Spins (Bonus 2)
     int totalApexSpinsTriggers = 0;
     long totalApexSpinsWin = 0;
     long totalApexSpinsPlayed = 0;
@@ -156,7 +194,6 @@ try
     long[] apexSpinsWinByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
     long[] apexSpinsPlayedByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
 
-    // Detailed stats for Colossal Spins (Bonus 3)
     int totalColossalSpinsTriggers = 0;
     long totalColossalSpinsWin = 0;
     long totalColossalSpinsPlayed = 0;
@@ -164,8 +201,9 @@ try
     int[] colossalSpinsTriggersByPower = new int[config.ColossalSpinsCounts.Length];
     long[] colossalSpinsWinByPower = new long[config.ColossalSpinsCounts.Length];
     long[] colossalSpinsPlayedByPower = new long[config.ColossalSpinsCounts.Length];
+    var colossalSymbolHits = new Dictionary<int, long>();
+    var colossalSymbolWins = new Dictionary<int, long>();
 
-    // Detailed stats for Primal Zone Bonus (Bonus 4)
     int totalPrimalZoneTriggers = 0;
     long totalPrimalZoneWin = 0;
     long totalPrimalZonePlayed = 0;
@@ -176,274 +214,114 @@ try
     long[] primalZonePlayedByPower = new long[config.PrimalZoneSpins.Length];
     int[] primalZoneStageHits = new int[4];
 
-    // Detailed stats for Stampede Spin
     int totalStampedeSpins = 0;
     long totalStampedeWin = 0;
     long totalStampedePotsAdded = 0;
 
-    // Colossal Symbol Detailed Stats Breakdown
-    var colossalSymbolHits = new Dictionary<int, long>();
-    var colossalSymbolWins = new Dictionary<int, long>();
-    
-    // Detailed collect feature stats
-    int collectTriggersWith1Collector = 0;
-    int collectTriggersWith2Collectors = 0;
-    double totalCollectCashMultiplierSum = 0.0;
-    long totalCollectFireCoresCount = 0;
-    int spinsWithCollectorButNoFireCore = 0;
-    int spinsWithFireCoreButNoCollector = 0;
-
-    // Detailed jackpot bonus stats
-    int[] jackpotTriggersByFireCoreCount = new int[16];
-    long totalFireCoresOnJackpotTrigger = 0;
-
-    var jackpotHits = new Dictionary<string, int>();
-    var jackpotWins = new Dictionary<string, long>();
-    foreach (var jpName in config.JackpotNames)
+    foreach (var w in workers)
     {
-        jackpotHits[jpName] = 0;
-        jackpotWins[jpName] = 0;
-    }
-    
-    for (int i = 0; i < totalSpins; i++)
-    {
-        var spinResult = engine.Spin(rng);
-        totalWin += spinResult.TotalWin;
-        totalFeatureWin += spinResult.FeatureWin;
-        totalLineWin += (spinResult.TotalWin - spinResult.FeatureWin);
-        
-        if (spinResult.IsStampedeSpin)
+        totalWin += w.TotalWin;
+        totalLineWin += w.TotalLineWin;
+        totalFeatureWin += w.TotalFeatureWin;
+        winSpins += w.WinSpins;
+        totalPowerUpTriggers += w.TotalPowerUpTriggers;
+
+        spinsWithCollectorOnReel0Or4 += w.SpinsWithCollectorOnReel0Or4;
+        spinsWithFireCore += w.SpinsWithFireCore;
+        collectionTriggerSpins += w.CollectionTriggerSpins;
+        collectTriggersWith1Collector += w.CollectTriggersWith1Collector;
+        collectTriggersWith2Collectors += w.CollectTriggersWith2Collectors;
+        totalCollectCashMultiplierSum += w.TotalCollectCashMultiplierSum;
+        totalCollectFireCoresCount += w.TotalCollectFireCoresCount;
+        spinsWithCollectorButNoFireCore += w.SpinsWithCollectorButNoFireCore;
+        spinsWithFireCoreButNoCollector += w.SpinsWithFireCoreButNoCollector;
+
+        totalJackpotBonusTriggers += w.TotalJackpotBonusTriggers;
+        totalJackpotBonusWin += w.TotalJackpotBonusWin;
+        totalFireCoresOnJackpotTrigger += w.TotalFireCoresOnJackpotTrigger;
+
+        for (int i = 0; i < 16; i++)
         {
-            totalStampedeSpins++;
-            totalStampedeWin += spinResult.TotalWin;
-            totalStampedePotsAdded += spinResult.StampedeAddedPotCount;
+            jackpotTriggersByFireCoreCount[i] += w.JackpotTriggersByFireCoreCount[i];
         }
 
-        if (spinResult.TotalWin > 0)
+        foreach (var kvp in w.JackpotHits)
         {
-            winSpins++;
+            jackpotHits[kvp.Key] = jackpotHits.GetValueOrDefault(kvp.Key) + kvp.Value;
+        }
+        foreach (var kvp in w.JackpotWins)
+        {
+            jackpotWins[kvp.Key] = jackpotWins.GetValueOrDefault(kvp.Key) + kvp.Value;
         }
 
-        if (spinResult.SetRandomBonusPowerToMax)
+        for (int i = 0; i < 4; i++)
         {
-            totalPowerUpTriggers++;
+            spinsWithPotTrigger[i] += w.SpinsWithPotTrigger[i];
+            totalPotTriggers[i] += w.TotalPotTriggers[i];
+            totalPotTriggerPowers[i] += w.TotalPotTriggerPowers[i];
         }
 
-        if (trackFullStats)
+        totalLockSlingoTriggers += w.TotalLockSlingoTriggers;
+        totalLockSlingoWin += w.TotalLockSlingoWin;
+        totalLockSlingoSlingosCompleted += w.TotalLockSlingoSlingosCompleted;
+        totalLockSlingoCashSum += w.TotalLockSlingoCashSum;
+        totalLockSlingoLadderSum += w.TotalLockSlingoLadderSum;
+        totalLockSlingoMinWinApplied += w.TotalLockSlingoMinWinApplied;
+        totalLockSlingoSpinsAwarded += w.TotalLockSlingoSpinsAwarded;
+        for (int i = 0; i < lockSlingoTriggersByPower.Length; i++)
         {
-            // Scan screen for stats
-            int fireCoreCount = 0;
-            for (int r = 0; r < 5; r++)
-            {
-                for (int row = 0; row < 3; row++)
-                {
-                    if (spinResult.ScreenSymbols[r][row] == config.FireCoreSymbolId)
-                    {
-                        fireCoreCount++;
-                    }
-                }
-            }
-
-            int collectorCount = 0;
-            for (int row = 0; row < 3; row++)
-            {
-                if (spinResult.ScreenSymbols[0][row] == config.CollectorSymbolId) collectorCount++;
-                if (spinResult.ScreenSymbols[4][row] == config.CollectorSymbolId) collectorCount++;
-            }
-
-            if (collectorCount > 0)
-            {
-                spinsWithCollectorOnReel0Or4++;
-            }
-            if (fireCoreCount > 0)
-            {
-                spinsWithFireCore++;
-            }
-
-            if (collectorCount > 0 && fireCoreCount == 0)
-            {
-                spinsWithCollectorButNoFireCore++;
-            }
-            if (fireCoreCount > 0 && collectorCount == 0)
-            {
-                spinsWithFireCoreButNoCollector++;
-            }
-
-            if (spinResult.CollectorTriggered)
-            {
-                collectionTriggerSpins++;
-                if (spinResult.CollectorCount == 1) collectTriggersWith1Collector++;
-                else if (spinResult.CollectorCount == 2) collectTriggersWith2Collectors++;
-
-                totalCollectCashMultiplierSum += spinResult.TotalCollectedMultiplier;
-                totalCollectFireCoresCount += fireCoreCount;
-            }
-
-            if (spinResult.JackpotBonusTriggered)
-            {
-                totalJackpotBonusTriggers++;
-                totalJackpotBonusWin += spinResult.JackpotBonusWin;
-                totalFireCoresOnJackpotTrigger += fireCoreCount;
-                if (fireCoreCount >= 0 && fireCoreCount < jackpotTriggersByFireCoreCount.Length)
-                {
-                    jackpotTriggersByFireCoreCount[fireCoreCount]++;
-                }
-                if (jackpotHits.ContainsKey(spinResult.WonJackpotName))
-                {
-                    jackpotHits[spinResult.WonJackpotName]++;
-                    jackpotWins[spinResult.WonJackpotName] += spinResult.JackpotBonusWin;
-                }
-            }
-            
-            // Track pot landing and triggers
-            for (int p = 0; p < 4; p++)
-            {
-                int symbolId = 10 + p;
-                bool hasPotTrigger = false;
-                for (int r = 0; r < 5; r++)
-                {
-                    for (int row = 0; row < 3; row++)
-                    {
-                        if (spinResult.ScreenSymbols[r][row] == symbolId)
-                        {
-                            hasPotTrigger = true;
-                            break;
-                        }
-                    }
-                    if (hasPotTrigger) break;
-                }
-                if (hasPotTrigger)
-                {
-                    spinsWithPotTrigger[p]++;
-                }
-            }
-            
-            foreach (var potBonus in spinResult.TriggeredPotBonuses)
-            {
-                int p = potBonus.PotIndex;
-                totalPotTriggers[p]++;
-                totalPotTriggerPowers[p] += potBonus.Power;
-                
-                if (p == 0)
-                {
-                    totalLockSlingoTriggers++;
-                    totalLockSlingoWin += potBonus.Win;
-                    totalLockSlingoSlingosCompleted += potBonus.CompletedSlingos;
-                    totalLockSlingoCashSum += potBonus.CashValuesSum;
-                    totalLockSlingoLadderSum += potBonus.LadderPrize;
-                    totalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
-                    if (potBonus.MinWinApplied)
-                    {
-                        totalLockSlingoMinWinApplied++;
-                    }
-                    if (potBonus.Power >= 0 && potBonus.Power < lockSlingoTriggersByPower.Length)
-                    {
-                        lockSlingoTriggersByPower[potBonus.Power]++;
-                    }
-                }
-                else if (p == 1)
-                {
-                    totalApexSpinsTriggers++;
-                    totalApexSpinsWin += potBonus.Win;
-                    totalApexSpinsPlayed += potBonus.SpinsPlayed;
-                    if (potBonus.MinWinApplied)
-                    {
-                        totalApexSpinsMinWinApplied++;
-                    }
-                    if (potBonus.Power >= 0 && potBonus.Power < apexSpinsTriggersByPower.Length)
-                    {
-                        apexSpinsTriggersByPower[potBonus.Power]++;
-                        apexSpinsWinByPower[potBonus.Power] += potBonus.Win;
-                        apexSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
-                    }
-                }
-                else if (p == 2)
-                {
-                    totalColossalSpinsTriggers++;
-                    totalColossalSpinsWin += potBonus.Win;
-                    totalColossalSpinsPlayed += potBonus.SpinsPlayed;
-                    if (potBonus.MinWinApplied)
-                    {
-                        totalColossalSpinsMinWinApplied++;
-                    }
-                    if (potBonus.Power >= 0 && potBonus.Power < colossalSpinsTriggersByPower.Length)
-                    {
-                        colossalSpinsTriggersByPower[potBonus.Power]++;
-                        colossalSpinsWinByPower[potBonus.Power] += potBonus.Win;
-                        colossalSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
-                    }
-                    foreach (var kvp in potBonus.ColossalSymbolHits)
-                    {
-                        if (!colossalSymbolHits.ContainsKey(kvp.Key))
-                        {
-                            colossalSymbolHits[kvp.Key] = 0;
-                            colossalSymbolWins[kvp.Key] = 0;
-                        }
-                        colossalSymbolHits[kvp.Key] += kvp.Value;
-                        if (potBonus.ColossalSymbolWins.TryGetValue(kvp.Key, out long win))
-                        {
-                            colossalSymbolWins[kvp.Key] += win;
-                        }
-                    }
-                }
-                else if (p == 3)
-                {
-                    totalPrimalZoneTriggers++;
-                    totalPrimalZoneWin += potBonus.Win;
-                    totalPrimalZonePlayed += potBonus.SpinsPlayed;
-                    totalPrimalZoneBananas += potBonus.BananasCollected;
-                    if (potBonus.MinWinApplied)
-                    {
-                        totalPrimalZoneMinWinApplied++;
-                    }
-                    if (potBonus.Power >= 0 && potBonus.Power < primalZoneTriggersByPower.Length)
-                    {
-                        primalZoneTriggersByPower[potBonus.Power]++;
-                        primalZoneWinByPower[potBonus.Power] += potBonus.Win;
-                        primalZonePlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
-                    }
-                    if (potBonus.FinalPrimalZoneStage >= 0 && potBonus.FinalPrimalZoneStage < 4)
-                    {
-                        primalZoneStageHits[potBonus.FinalPrimalZoneStage]++;
-                    }
-                }
-            }
+            lockSlingoTriggersByPower[i] += w.LockSlingoTriggersByPower[i];
         }
-        else
+
+        totalApexSpinsTriggers += w.TotalApexSpinsTriggers;
+        totalApexSpinsWin += w.TotalApexSpinsWin;
+        totalApexSpinsPlayed += w.TotalApexSpinsPlayed;
+        totalApexSpinsMinWinApplied += w.TotalApexSpinsMinWinApplied;
+        for (int i = 0; i < apexSpinsTriggersByPower.Length; i++)
         {
-            if (spinResult.JackpotBonusTriggered)
-            {
-                totalJackpotBonusWin += spinResult.JackpotBonusWin;
-            }
-            
-            foreach (var potBonus in spinResult.TriggeredPotBonuses)
-            {
-                if (potBonus.PotIndex == 0)
-                {
-                    totalLockSlingoTriggers++;
-                    totalLockSlingoWin += potBonus.Win;
-                    totalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
-                }
-                else if (potBonus.PotIndex == 1)
-                {
-                    totalApexSpinsTriggers++;
-                    totalApexSpinsWin += potBonus.Win;
-                    totalApexSpinsPlayed += potBonus.SpinsPlayed;
-                }
-                else if (potBonus.PotIndex == 2)
-                {
-                    totalColossalSpinsTriggers++;
-                    totalColossalSpinsWin += potBonus.Win;
-                    totalColossalSpinsPlayed += potBonus.SpinsPlayed;
-                }
-                else if (potBonus.PotIndex == 3)
-                {
-                    totalPrimalZoneTriggers++;
-                    totalPrimalZoneWin += potBonus.Win;
-                    totalPrimalZonePlayed += potBonus.SpinsPlayed;
-                }
-            }
+            apexSpinsTriggersByPower[i] += w.ApexSpinsTriggersByPower[i];
+            apexSpinsWinByPower[i] += w.ApexSpinsWinByPower[i];
+            apexSpinsPlayedByPower[i] += w.ApexSpinsPlayedByPower[i];
         }
+
+        totalColossalSpinsTriggers += w.TotalColossalSpinsTriggers;
+        totalColossalSpinsWin += w.TotalColossalSpinsWin;
+        totalColossalSpinsPlayed += w.TotalColossalSpinsPlayed;
+        totalColossalSpinsMinWinApplied += w.TotalColossalSpinsMinWinApplied;
+        for (int i = 0; i < colossalSpinsTriggersByPower.Length; i++)
+        {
+            colossalSpinsTriggersByPower[i] += w.ColossalSpinsTriggersByPower[i];
+            colossalSpinsWinByPower[i] += w.ColossalSpinsWinByPower[i];
+            colossalSpinsPlayedByPower[i] += w.ColossalSpinsPlayedByPower[i];
+        }
+        foreach (var kvp in w.ColossalSymbolHits)
+        {
+            colossalSymbolHits[kvp.Key] = colossalSymbolHits.GetValueOrDefault(kvp.Key) + kvp.Value;
+        }
+        foreach (var kvp in w.ColossalSymbolWins)
+        {
+            colossalSymbolWins[kvp.Key] = colossalSymbolWins.GetValueOrDefault(kvp.Key) + kvp.Value;
+        }
+
+        totalPrimalZoneTriggers += w.TotalPrimalZoneTriggers;
+        totalPrimalZoneWin += w.TotalPrimalZoneWin;
+        totalPrimalZonePlayed += w.TotalPrimalZonePlayed;
+        totalPrimalZoneBananas += w.TotalPrimalZoneBananas;
+        totalPrimalZoneMinWinApplied += w.TotalPrimalZoneMinWinApplied;
+        for (int i = 0; i < primalZoneTriggersByPower.Length; i++)
+        {
+            primalZoneTriggersByPower[i] += w.PrimalZoneTriggersByPower[i];
+            primalZoneWinByPower[i] += w.PrimalZoneWinByPower[i];
+            primalZonePlayedByPower[i] += w.PrimalZonePlayedByPower[i];
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            primalZoneStageHits[i] += w.PrimalZoneStageHits[i];
+        }
+
+        totalStampedeSpins += w.TotalStampedeSpins;
+        totalStampedeWin += w.TotalStampedeWin;
+        totalStampedePotsAdded += w.TotalStampedePotsAdded;
     }
     
     double totalRtp = (double)totalWin / (totalSpins * 100.0);
@@ -905,3 +783,310 @@ catch (Exception ex)
     Console.WriteLine($"Error: {ex.Message}");
     Console.WriteLine(ex.StackTrace);
 }
+
+class SimWorkerStats
+{
+    public long TotalWin;
+    public long TotalLineWin;
+    public long TotalFeatureWin;
+    public int WinSpins;
+    public int TotalPowerUpTriggers;
+
+    public int SpinsWithCollectorOnReel0Or4;
+    public int SpinsWithFireCore;
+    public int CollectionTriggerSpins;
+    public int CollectTriggersWith1Collector;
+    public int CollectTriggersWith2Collectors;
+    public double TotalCollectCashMultiplierSum;
+    public long TotalCollectFireCoresCount;
+    public int SpinsWithCollectorButNoFireCore;
+    public int SpinsWithFireCoreButNoCollector;
+
+    public int TotalJackpotBonusTriggers;
+    public long TotalJackpotBonusWin;
+    public long TotalFireCoresOnJackpotTrigger;
+    public int[] JackpotTriggersByFireCoreCount = new int[16];
+    public Dictionary<string, int> JackpotHits = new();
+    public Dictionary<string, long> JackpotWins = new();
+
+    public int[] SpinsWithPotTrigger = new int[4];
+    public int[] TotalPotTriggers = new int[4];
+    public long[] TotalPotTriggerPowers = new long[4];
+
+    public int TotalLockSlingoTriggers;
+    public long TotalLockSlingoWin;
+    public long TotalLockSlingoSlingosCompleted;
+    public double TotalLockSlingoCashSum;
+    public double TotalLockSlingoLadderSum;
+    public int TotalLockSlingoMinWinApplied;
+    public long TotalLockSlingoSpinsAwarded;
+    public int[] LockSlingoTriggersByPower;
+
+    public int TotalApexSpinsTriggers;
+    public long TotalApexSpinsWin;
+    public long TotalApexSpinsPlayed;
+    public int TotalApexSpinsMinWinApplied;
+    public int[] ApexSpinsTriggersByPower;
+    public long[] ApexSpinsWinByPower;
+    public long[] ApexSpinsPlayedByPower;
+
+    public int TotalColossalSpinsTriggers;
+    public long TotalColossalSpinsWin;
+    public long TotalColossalSpinsPlayed;
+    public int TotalColossalSpinsMinWinApplied;
+    public int[] ColossalSpinsTriggersByPower;
+    public long[] ColossalSpinsWinByPower;
+    public long[] ColossalSpinsPlayedByPower;
+    public Dictionary<int, long> ColossalSymbolHits = new();
+    public Dictionary<int, long> ColossalSymbolWins = new();
+
+    public int TotalPrimalZoneTriggers;
+    public long TotalPrimalZoneWin;
+    public long TotalPrimalZonePlayed;
+    public long TotalPrimalZoneBananas;
+    public int TotalPrimalZoneMinWinApplied;
+    public int[] PrimalZoneTriggersByPower;
+    public long[] PrimalZoneWinByPower;
+    public long[] PrimalZonePlayedByPower;
+    public int[] PrimalZoneStageHits = new int[4];
+
+    public int TotalStampedeSpins;
+    public long TotalStampedeWin;
+    public long TotalStampedePotsAdded;
+
+    public SimWorkerStats(PrimalConfig config)
+    {
+        foreach (var jp in config.JackpotNames)
+        {
+            JackpotHits[jp] = 0;
+            JackpotWins[jp] = 0;
+        }
+
+        LockSlingoTriggersByPower = new int[config.LockSlingoSpins.Length];
+        ApexSpinsTriggersByPower = new int[config.ApexSpinsTopAwardMultipliers.Length];
+        ApexSpinsWinByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
+        ApexSpinsPlayedByPower = new long[config.ApexSpinsTopAwardMultipliers.Length];
+
+        ColossalSpinsTriggersByPower = new int[config.ColossalSpinsCounts.Length];
+        ColossalSpinsWinByPower = new long[config.ColossalSpinsCounts.Length];
+        ColossalSpinsPlayedByPower = new long[config.ColossalSpinsCounts.Length];
+
+        PrimalZoneTriggersByPower = new int[config.PrimalZoneSpins.Length];
+        PrimalZoneWinByPower = new long[config.PrimalZoneSpins.Length];
+        PrimalZonePlayedByPower = new long[config.PrimalZoneSpins.Length];
+    }
+
+    public void Record(SpinResult spinResult, PrimalConfig config, bool trackFullStats)
+    {
+        TotalWin += spinResult.TotalWin;
+        TotalFeatureWin += spinResult.FeatureWin;
+        TotalLineWin += (spinResult.TotalWin - spinResult.FeatureWin);
+
+        if (spinResult.IsStampedeSpin)
+        {
+            TotalStampedeSpins++;
+            TotalStampedeWin += spinResult.TotalWin;
+            TotalStampedePotsAdded += spinResult.StampedeAddedPotCount;
+        }
+
+        if (spinResult.TotalWin > 0)
+        {
+            WinSpins++;
+        }
+
+        if (spinResult.SetRandomBonusPowerToMax)
+        {
+            TotalPowerUpTriggers++;
+        }
+
+        if (trackFullStats)
+        {
+            int fireCoreCount = 0;
+            for (int r = 0; r < 5; r++)
+            {
+                for (int row = 0; row < 3; row++)
+                {
+                    if (spinResult.ScreenSymbols[r][row] == config.FireCoreSymbolId)
+                    {
+                        fireCoreCount++;
+                    }
+                }
+            }
+
+            int collectorCount = 0;
+            for (int row = 0; row < 3; row++)
+            {
+                if (spinResult.ScreenSymbols[0][row] == config.CollectorSymbolId) collectorCount++;
+                if (spinResult.ScreenSymbols[4][row] == config.CollectorSymbolId) collectorCount++;
+            }
+
+            if (collectorCount > 0) SpinsWithCollectorOnReel0Or4++;
+            if (fireCoreCount > 0) SpinsWithFireCore++;
+            if (collectorCount > 0 && fireCoreCount == 0) SpinsWithCollectorButNoFireCore++;
+            if (fireCoreCount > 0 && collectorCount == 0) SpinsWithFireCoreButNoCollector++;
+
+            if (spinResult.CollectorTriggered)
+            {
+                CollectionTriggerSpins++;
+                if (spinResult.CollectorCount == 1) CollectTriggersWith1Collector++;
+                else if (spinResult.CollectorCount == 2) CollectTriggersWith2Collectors++;
+
+                TotalCollectCashMultiplierSum += spinResult.TotalCollectedMultiplier;
+                TotalCollectFireCoresCount += fireCoreCount;
+            }
+
+            if (spinResult.JackpotBonusTriggered)
+            {
+                TotalJackpotBonusTriggers++;
+                TotalJackpotBonusWin += spinResult.JackpotBonusWin;
+                TotalFireCoresOnJackpotTrigger += fireCoreCount;
+                if (fireCoreCount >= 0 && fireCoreCount < JackpotTriggersByFireCoreCount.Length)
+                {
+                    JackpotTriggersByFireCoreCount[fireCoreCount]++;
+                }
+                if (JackpotHits.ContainsKey(spinResult.WonJackpotName))
+                {
+                    JackpotHits[spinResult.WonJackpotName]++;
+                    JackpotWins[spinResult.WonJackpotName] += spinResult.JackpotBonusWin;
+                }
+            }
+
+            for (int p = 0; p < 4; p++)
+            {
+                int symbolId = 10 + p;
+                bool hasPotTrigger = false;
+                for (int r = 0; r < 5; r++)
+                {
+                    for (int row = 0; row < 3; row++)
+                    {
+                        if (spinResult.ScreenSymbols[r][row] == symbolId)
+                        {
+                            hasPotTrigger = true;
+                            break;
+                        }
+                    }
+                    if (hasPotTrigger) break;
+                }
+                if (hasPotTrigger)
+                {
+                    SpinsWithPotTrigger[p]++;
+                }
+            }
+
+            foreach (var potBonus in spinResult.TriggeredPotBonuses)
+            {
+                int p = potBonus.PotIndex;
+                TotalPotTriggers[p]++;
+                TotalPotTriggerPowers[p] += potBonus.Power;
+
+                if (p == 0)
+                {
+                    TotalLockSlingoTriggers++;
+                    TotalLockSlingoWin += potBonus.Win;
+                    TotalLockSlingoSlingosCompleted += potBonus.CompletedSlingos;
+                    TotalLockSlingoCashSum += potBonus.CashValuesSum;
+                    TotalLockSlingoLadderSum += potBonus.LadderPrize;
+                    TotalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
+                    if (potBonus.MinWinApplied) TotalLockSlingoMinWinApplied++;
+                    if (potBonus.Power >= 0 && potBonus.Power < LockSlingoTriggersByPower.Length)
+                    {
+                        LockSlingoTriggersByPower[potBonus.Power]++;
+                    }
+                }
+                else if (p == 1)
+                {
+                    TotalApexSpinsTriggers++;
+                    TotalApexSpinsWin += potBonus.Win;
+                    TotalApexSpinsPlayed += potBonus.SpinsPlayed;
+                    if (potBonus.MinWinApplied) TotalApexSpinsMinWinApplied++;
+                    if (potBonus.Power >= 0 && potBonus.Power < ApexSpinsTriggersByPower.Length)
+                    {
+                        ApexSpinsTriggersByPower[potBonus.Power]++;
+                        ApexSpinsWinByPower[potBonus.Power] += potBonus.Win;
+                        ApexSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                }
+                else if (p == 2)
+                {
+                    TotalColossalSpinsTriggers++;
+                    TotalColossalSpinsWin += potBonus.Win;
+                    TotalColossalSpinsPlayed += potBonus.SpinsPlayed;
+                    if (potBonus.MinWinApplied) TotalColossalSpinsMinWinApplied++;
+                    if (potBonus.Power >= 0 && potBonus.Power < ColossalSpinsTriggersByPower.Length)
+                    {
+                        ColossalSpinsTriggersByPower[potBonus.Power]++;
+                        ColossalSpinsWinByPower[potBonus.Power] += potBonus.Win;
+                        ColossalSpinsPlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                    foreach (var kvp in potBonus.ColossalSymbolHits)
+                    {
+                        if (!ColossalSymbolHits.ContainsKey(kvp.Key))
+                        {
+                            ColossalSymbolHits[kvp.Key] = 0;
+                            ColossalSymbolWins[kvp.Key] = 0;
+                        }
+                        ColossalSymbolHits[kvp.Key] += kvp.Value;
+                        if (potBonus.ColossalSymbolWins.TryGetValue(kvp.Key, out long win))
+                        {
+                            ColossalSymbolWins[kvp.Key] += win;
+                        }
+                    }
+                }
+                else if (p == 3)
+                {
+                    TotalPrimalZoneTriggers++;
+                    TotalPrimalZoneWin += potBonus.Win;
+                    TotalPrimalZonePlayed += potBonus.SpinsPlayed;
+                    TotalPrimalZoneBananas += potBonus.BananasCollected;
+                    if (potBonus.MinWinApplied) TotalPrimalZoneMinWinApplied++;
+                    if (potBonus.Power >= 0 && potBonus.Power < PrimalZoneTriggersByPower.Length)
+                    {
+                        PrimalZoneTriggersByPower[potBonus.Power]++;
+                        PrimalZoneWinByPower[potBonus.Power] += potBonus.Win;
+                        PrimalZonePlayedByPower[potBonus.Power] += potBonus.SpinsPlayed;
+                    }
+                    if (potBonus.FinalPrimalZoneStage >= 0 && potBonus.FinalPrimalZoneStage < 4)
+                    {
+                        PrimalZoneStageHits[potBonus.FinalPrimalZoneStage]++;
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (spinResult.JackpotBonusTriggered)
+            {
+                TotalJackpotBonusWin += spinResult.JackpotBonusWin;
+            }
+
+            foreach (var potBonus in spinResult.TriggeredPotBonuses)
+            {
+                if (potBonus.PotIndex == 0)
+                {
+                    TotalLockSlingoTriggers++;
+                    TotalLockSlingoWin += potBonus.Win;
+                    TotalLockSlingoSpinsAwarded += config.LockSlingoSpins[potBonus.Power];
+                }
+                else if (potBonus.PotIndex == 1)
+                {
+                    TotalApexSpinsTriggers++;
+                    TotalApexSpinsWin += potBonus.Win;
+                    TotalApexSpinsPlayed += potBonus.SpinsPlayed;
+                }
+                else if (potBonus.PotIndex == 2)
+                {
+                    TotalColossalSpinsTriggers++;
+                    TotalColossalSpinsWin += potBonus.Win;
+                    TotalColossalSpinsPlayed += potBonus.SpinsPlayed;
+                }
+                else if (potBonus.PotIndex == 3)
+                {
+                    TotalPrimalZoneTriggers++;
+                    TotalPrimalZoneWin += potBonus.Win;
+                    TotalPrimalZonePlayed += potBonus.SpinsPlayed;
+                }
+            }
+        }
+    }
+}
+
