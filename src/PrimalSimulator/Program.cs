@@ -9,9 +9,13 @@ using PrimalGame;
 using SlotFramework.Utilities;
 using SlotFramework.Models;
 
-string defaultPath = "FirePrimalElephant95.xlsx";
 string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 string downloadsFolder = Path.Combine(userProfile, "Downloads");
+string defaultPath = Path.Combine(downloadsFolder, "FirePrimalElephant95.xlsx");
+if (!File.Exists(defaultPath))
+{
+    defaultPath = "FirePrimalElephant95.xlsx";
+}
 string resultsPath = Path.Combine(downloadsFolder, "FirePrimalElephant95_Results.xlsx");
 
 bool trackFullStats = true;

@@ -12,18 +12,16 @@ public class SlotEngineTests
 {
     private static PrimalConfig LoadConfig()
     {
+        string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FirePrimalElephant95.xlsx");
+        if (File.Exists(downloadsPath))
+        {
+            return ExcelConfigLoader.Load(downloadsPath);
+        }
+
         string excelPath = Path.Combine(Directory.GetCurrentDirectory(), "FirePrimalElephant95.xlsx");
         if (!File.Exists(excelPath))
         {
             excelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", "FirePrimalElephant95.xlsx");
-        }
-        if (!File.Exists(excelPath))
-        {
-            string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FirePrimalElephant95.xlsx");
-            if (File.Exists(downloadsPath))
-            {
-                excelPath = downloadsPath;
-            }
         }
         return ExcelConfigLoader.Load(excelPath);
     }
