@@ -105,26 +105,42 @@ class Program
 
         string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         string downloadsFolder = Path.Combine(userProfile, "Downloads");
-        string defaultPath = Path.Combine(downloadsFolder, "CashVortexTriplePower95.xlsx");
-        if (!File.Exists(defaultPath))
+        string localDefault = Path.Combine(downloadsFolder, "CashVortexTriplePower95.xlsx");
+        if (!File.Exists(localDefault))
         {
-            defaultPath = "CashVortexTriplePower95.xlsx";
+            localDefault = "CashVortexTriplePower95.xlsx";
         }
-        string resultsPath = Path.Combine(downloadsFolder, "CashVortexTriplePower95_Results.xlsx");
+        
+        string configSource = File.Exists(localDefault) ? localDefault : CashVortexExcelLoader.DefaultGoogleSheetUrl;
+        string resultsPath = Directory.Exists(downloadsFolder) 
+            ? Path.Combine(downloadsFolder, "CashVortexTriplePower95_Results.xlsx")
+            : "CashVortexTriplePower95_Results.xlsx";
 
-        string filePath = defaultPath;
-        foreach (var arg in args)
+        for (int i = 0; i < args.Length; i++)
         {
-            if (!arg.StartsWith("-"))
+            var arg = args[i];
+            if (arg.Equals("--url", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
-                filePath = arg;
+                configSource = args[++i];
+            }
+            else if (!arg.StartsWith("-"))
+            {
+                configSource = arg;
             }
         }
 
         try
         {
-            Console.WriteLine($"Loading configuration from: {filePath}...");
-            CashVortexConfig config = CashVortexExcelLoader.Load(filePath);
+            if (SlotFramework.Utilities.GoogleSheetDownloader.IsOnlineSource(configSource))
+            {
+                Console.WriteLine($"Loading configuration online from Google Sheet: {configSource}...");
+            }
+            else
+            {
+                Console.WriteLine($"Loading configuration from local file: {configSource}...");
+            }
+
+            CashVortexConfig config = CashVortexExcelLoader.Load(configSource);
 
             Console.WriteLine("\nLoaded Configuration Summary:");
             Console.WriteLine(new string('-', 85));

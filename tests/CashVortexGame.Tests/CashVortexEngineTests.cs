@@ -11,17 +11,7 @@ public class CashVortexEngineTests
 {
     private static CashVortexConfig LoadConfig()
     {
-        string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "CashVortexTriplePower95.xlsx");
-        if (File.Exists(downloadsPath))
-        {
-            return CashVortexExcelLoader.Load(downloadsPath);
-        }
-        string localPath = Path.Combine(Directory.GetCurrentDirectory(), "CashVortexTriplePower95.xlsx");
-        if (!File.Exists(localPath))
-        {
-            localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", "CashVortexTriplePower95.xlsx");
-        }
-        return CashVortexExcelLoader.Load(localPath);
+        return CashVortexExcelLoader.Load();
     }
 
     [Fact]

@@ -6,26 +6,59 @@ using System.Linq;
 using ExcelDataReader;
 using ClosedXML.Excel;
 using SlotFramework.Models;
+using SlotFramework.Utilities;
 
 namespace PrimalGame.Config;
 
 public class ExcelConfigLoader
 {
+    public const string DefaultGoogleSheetUrl = "https://docs.google.com/spreadsheets/d/1vcIwTl9a7LCG2ZhFBJuVI7J3y8vttJwSJShcdSrCTFU/edit?usp=sharing";
+
     static ExcelConfigLoader()
     {
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
     }
 
-    public static PrimalConfig Load(string filePath)
+    public static PrimalConfig Load(string? filePathOrUrl = null)
     {
-        if (!File.Exists(filePath))
+        // 1. If explicit online URL/ID is provided, load from Google Sheet directly
+        if (!string.IsNullOrWhiteSpace(filePathOrUrl) && GoogleSheetDownloader.IsOnlineSource(filePathOrUrl))
         {
-            throw new FileNotFoundException("Excel configuration file not found", filePath);
+            using var onlineStream = GoogleSheetDownloader.DownloadStream(filePathOrUrl);
+            return Load(onlineStream);
         }
 
+        // 2. If explicit existing file path is provided, load it
+        if (!string.IsNullOrEmpty(filePathOrUrl) && File.Exists(filePathOrUrl))
+        {
+            using var fileStream = File.Open(filePathOrUrl, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Load(fileStream);
+        }
+
+        // 3. Fallbacks: check local Downloads, then current dir
+        string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FirePrimalElephant95.xlsx");
+        if (File.Exists(downloadsPath))
+        {
+            using var fileStream = File.Open(downloadsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Load(fileStream);
+        }
+
+        string localPath = "FirePrimalElephant95.xlsx";
+        if (File.Exists(localPath))
+        {
+            using var fileStream = File.Open(localPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Load(fileStream);
+        }
+
+        // 4. Default: load directly from online Google Sheet
+        using var defaultStream = GoogleSheetDownloader.DownloadStream(DefaultGoogleSheetUrl);
+        return Load(defaultStream);
+    }
+
+    public static PrimalConfig Load(Stream stream)
+    {
         var config = new PrimalConfig();
 
-        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = ExcelReaderFactory.CreateReader(stream);
         
         var dataSet = reader.AsDataSet();

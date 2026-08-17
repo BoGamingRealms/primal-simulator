@@ -11,18 +11,22 @@ using SlotFramework.Models;
 
 string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 string downloadsFolder = Path.Combine(userProfile, "Downloads");
-string defaultPath = Path.Combine(downloadsFolder, "FirePrimalElephant95.xlsx");
-if (!File.Exists(defaultPath))
+string localDefault = Path.Combine(downloadsFolder, "FirePrimalElephant95.xlsx");
+if (!File.Exists(localDefault))
 {
-    defaultPath = "FirePrimalElephant95.xlsx";
+    localDefault = "FirePrimalElephant95.xlsx";
 }
-string resultsPath = Path.Combine(downloadsFolder, "FirePrimalElephant95_Results.xlsx");
+
+string configSource = File.Exists(localDefault) ? localDefault : ExcelConfigLoader.DefaultGoogleSheetUrl;
+string resultsPath = Directory.Exists(downloadsFolder)
+    ? Path.Combine(downloadsFolder, "FirePrimalElephant95_Results.xlsx")
+    : "FirePrimalElephant95_Results.xlsx";
 
 bool trackFullStats = true;
-string filePath = defaultPath;
 
-foreach (var arg in args)
+for (int i = 0; i < args.Length; i++)
 {
+    var arg = args[i];
     if (arg.Equals("--basic", StringComparison.OrdinalIgnoreCase))
     {
         trackFullStats = false;
@@ -31,16 +35,28 @@ foreach (var arg in args)
     {
         trackFullStats = true;
     }
+    else if (arg.Equals("--url", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+    {
+        configSource = args[++i];
+    }
     else if (!arg.StartsWith("-"))
     {
-        filePath = arg;
+        configSource = arg;
     }
 }
 
 try
 {
-    Console.WriteLine($"Loading configuration from: {filePath}...");
-    PrimalConfig config = ExcelConfigLoader.Load(filePath);
+    if (GoogleSheetDownloader.IsOnlineSource(configSource))
+    {
+        Console.WriteLine($"Loading configuration online from Google Sheet: {configSource}...");
+    }
+    else
+    {
+        Console.WriteLine($"Loading configuration from local file: {configSource}...");
+    }
+
+    PrimalConfig config = ExcelConfigLoader.Load(configSource);
     
     // 1. Print Symbols & Paytable
     Console.WriteLine("\nLoaded Symbols & Paytable:");

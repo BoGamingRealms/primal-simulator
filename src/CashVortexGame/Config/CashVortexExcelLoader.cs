@@ -5,39 +5,59 @@ using System.Collections.Generic;
 using System.Linq;
 using ExcelDataReader;
 using CashVortexGame.Config;
+using SlotFramework.Utilities;
 
 namespace CashVortexGame.Config;
 
 public class CashVortexExcelLoader
 {
+    public const string DefaultGoogleSheetUrl = "https://docs.google.com/spreadsheets/d/1pYeAirnQRzlnHgQZGVG2eOVe1yHdtsflfJ9NQjVESbE/edit?usp=sharing";
+
     static CashVortexExcelLoader()
     {
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
     }
 
-    public static CashVortexConfig Load(string? filePath = null)
+    public static CashVortexConfig Load(string? filePathOrUrl = null)
     {
-        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        // 1. If explicit online URL/ID is provided, load from Google Sheet directly
+        if (!string.IsNullOrWhiteSpace(filePathOrUrl) && GoogleSheetDownloader.IsOnlineSource(filePathOrUrl))
         {
-            string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "CashVortexTriplePower95.xlsx");
-            if (File.Exists(downloadsPath))
-            {
-                filePath = downloadsPath;
-            }
-            else
-            {
-                filePath = "CashVortexTriplePower95.xlsx";
-            }
+            using var onlineStream = GoogleSheetDownloader.DownloadStream(filePathOrUrl);
+            return Load(onlineStream);
         }
 
-        if (!File.Exists(filePath))
+        // 2. If explicit existing file path is provided, load it
+        if (!string.IsNullOrEmpty(filePathOrUrl) && File.Exists(filePathOrUrl))
         {
-            throw new FileNotFoundException("Cash Vortex Excel configuration file not found", filePath);
+            using var fileStream = File.Open(filePathOrUrl, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Load(fileStream);
         }
 
+        // 3. Fallbacks: check local Downloads, then current dir
+        string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "CashVortexTriplePower95.xlsx");
+        if (File.Exists(downloadsPath))
+        {
+            using var fileStream = File.Open(downloadsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Load(fileStream);
+        }
+
+        string localPath = "CashVortexTriplePower95.xlsx";
+        if (File.Exists(localPath))
+        {
+            using var fileStream = File.Open(localPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Load(fileStream);
+        }
+
+        // 4. Default: load directly from online Google Sheet
+        using var defaultStream = GoogleSheetDownloader.DownloadStream(DefaultGoogleSheetUrl);
+        return Load(defaultStream);
+    }
+
+    public static CashVortexConfig Load(Stream stream)
+    {
         var config = new CashVortexConfig();
 
-        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = ExcelReaderFactory.CreateReader(stream);
         var result = reader.AsDataSet();
 
