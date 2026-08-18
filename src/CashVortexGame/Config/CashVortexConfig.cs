@@ -5,6 +5,25 @@ using SlotFramework.Utilities;
 
 namespace CashVortexGame.Config;
 
+public enum WheelPrizeType
+{
+    Multiplier,
+    UltraStrike,
+    Jackpot,
+    LockAndSlingo,
+    Upgrade
+}
+
+public class WheelPrizeDef
+{
+    public int PrizeId { get; set; }
+    public string PrizeString { get; set; } = string.Empty;
+    public int Weight { get; set; }
+    public WheelPrizeType Type { get; set; }
+    public double ParameterValue { get; set; } = 0.0;
+    public string? JackpotType { get; set; }
+}
+
 public class TableSelection
 {
     public int TableId { get; set; }
@@ -61,6 +80,10 @@ public class CashVortexConfig
     public List<CashCoinChance> CashCoinChances { get; set; } = new();
     public List<CashValueDef> CashCoinValues { get; set; } = new();
 
+    public List<WheelPrizeDef> MiniWheelPrizes { get; set; } = new();
+    public List<WheelPrizeDef> MegaWheelPrizes { get; set; } = new();
+    public List<WheelPrizeDef> UltraWheelPrizes { get; set; } = new();
+
     // Fast sampling structures
     public WeightTable TableSelectionWeights { get; set; } = new(Array.Empty<int>());
     public Dictionary<int, WeightTable> SpecialSymbolChanceWeights { get; set; } = new();
@@ -69,6 +92,10 @@ public class CashVortexConfig
     public WeightTable CashStrikeValueWeights { get; set; } = new(Array.Empty<int>());
     public Dictionary<int, WeightTable> CashCoinChanceWeights { get; set; } = new();
     public WeightTable CashCoinValueWeights { get; set; } = new(Array.Empty<int>());
+
+    public WeightTable MiniWheelWeightTable { get; set; } = new(Array.Empty<int>());
+    public WeightTable MegaWheelWeightTable { get; set; } = new(Array.Empty<int>());
+    public WeightTable UltraWheelWeightTable { get; set; } = new(Array.Empty<int>());
 
     public void BuildWeightTables()
     {
@@ -91,5 +118,9 @@ public class CashVortexConfig
         }
 
         CashCoinValueWeights = new WeightTable(CashCoinValues.Select(c => c.Weight).ToArray());
+
+        MiniWheelWeightTable = new WeightTable(MiniWheelPrizes.Select(p => p.Weight).ToArray());
+        MegaWheelWeightTable = new WeightTable(MegaWheelPrizes.Select(p => p.Weight).ToArray());
+        UltraWheelWeightTable = new WeightTable(UltraWheelPrizes.Select(p => p.Weight).ToArray());
     }
 }

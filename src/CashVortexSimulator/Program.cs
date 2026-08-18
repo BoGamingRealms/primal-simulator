@@ -27,6 +27,13 @@ public class CashVortexSimWorkerStats
     public int UltraStrikeHits { get; set; }
     public int XWheelHits { get; set; }
 
+    public long XWheelTotalWin { get; set; }
+    public int[] WheelReachHits { get; set; } = new int[4];
+    public long[] WheelRtpWin { get; set; } = new long[4];
+
+    public Dictionary<string, int> WheelPrizeHits { get; set; } = new();
+    public Dictionary<string, long> WheelPrizeWins { get; set; } = new();
+
     public Dictionary<string, int> JackpotHits { get; set; } = new();
     public Dictionary<string, long> JackpotWins { get; set; } = new();
 
@@ -56,13 +63,27 @@ public class CashVortexSimWorkerStats
 
         foreach (var pot in result.TriggeredPotBonuses)
         {
-            if (pot.BonusName == "Jackpot Bonus")
+            if (pot.BonusName.StartsWith("XWheel:"))
             {
-                // Record Jackpot trigger
+                XWheelTotalWin += pot.Win;
+                var parts = pot.BonusName.Split(':');
+                if (parts.Length >= 3)
+                {
+                    string wStr = parts[1]; // e.g. "W1", "W2", "W3"
+                    string prizeName = parts[2];
+                    if (wStr.Length >= 2 && int.TryParse(wStr.Substring(1), out int wLevel) && wLevel >= 1 && wLevel <= 3)
+                    {
+                        WheelReachHits[wLevel]++;
+                        WheelRtpWin[wLevel] += pot.Win;
+
+                        string prizeKey = $"{wStr}:{prizeName}";
+                        WheelPrizeHits[prizeKey] = WheelPrizeHits.GetValueOrDefault(prizeKey) + 1;
+                        WheelPrizeWins[prizeKey] = WheelPrizeWins.GetValueOrDefault(prizeKey) + pot.Win;
+                    }
+                }
             }
         }
 
-        // Count special symbol hits from current grid landing
         for (int r = 0; r < 5; r++)
         {
             for (int c = 0; c < 5; c++)
@@ -116,10 +137,20 @@ class Program
             ? Path.Combine(downloadsFolder, "CashVortexTriplePower95_Results.xlsx")
             : "CashVortexTriplePower95_Results.xlsx";
 
+        bool trackFullStats = true;
+
         for (int i = 0; i < args.Length; i++)
         {
             var arg = args[i];
-            if (arg.Equals("--url", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            if (arg.Equals("--basic", StringComparison.OrdinalIgnoreCase))
+            {
+                trackFullStats = false;
+            }
+            else if (arg.Equals("--full", StringComparison.OrdinalIgnoreCase))
+            {
+                trackFullStats = true;
+            }
+            else if (arg.Equals("--url", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
                 configSource = args[++i];
             }
@@ -140,33 +171,35 @@ class Program
                 Console.WriteLine($"Loading configuration from local file: {configSource}...");
             }
 
-            CashVortexConfig config = CashVortexExcelLoader.Load(configSource);
+            var config = CashVortexExcelLoader.Load(configSource);
 
             Console.WriteLine("\nLoaded Configuration Summary:");
-            Console.WriteLine(new string('-', 85));
+            Console.WriteLine("-------------------------------------------------------------------------------------");
             Console.WriteLine($"Table Selections Count: {config.TableSelections.Count}");
             Console.WriteLine($"Special Symbol Types: {config.SpecialSymbolDefs.Count}");
             Console.WriteLine($"Jackpot Types: {config.JackpotCoins.Count}");
             Console.WriteLine($"Cash Strike Values Count: {config.CashStrikeValues.Count}");
             Console.WriteLine($"Cash Coin Values Count: {config.CashCoinValues.Count}");
-            Console.WriteLine(new string('-', 85));
+            Console.WriteLine($"Mini Wheel Prizes: {config.MiniWheelPrizes.Count}");
+            Console.WriteLine($"Mega Wheel Prizes: {config.MegaWheelPrizes.Count}");
+            Console.WriteLine($"Ultra Wheel Prizes: {config.UltraWheelPrizes.Count}");
+            Console.WriteLine("-------------------------------------------------------------------------------------\n");
 
-            int totalSpins = 1000000;
-            Console.WriteLine($"\nGenerating real simulation results ({totalSpins:N0} spins)...");
+            int totalSpins = 1_000_000;
+            int workerCount = Environment.ProcessorCount;
+            int spinsPerWorker = totalSpins / workerCount;
+            var workers = new CashVortexSimWorkerStats[workerCount];
+
+            Console.WriteLine($"Generating real simulation results ({totalSpins:N0} spins)...");
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            int workerCount = Math.Max(1, Environment.ProcessorCount);
-            int baseSpinsPerWorker = totalSpins / workerCount;
-            var workers = new CashVortexSimWorkerStats[workerCount];
 
             Parallel.For(0, workerCount, w =>
             {
-                int spinsForThisWorker = (w == workerCount - 1)
-                    ? baseSpinsPerWorker + (totalSpins - (baseSpinsPerWorker * workerCount))
-                    : baseSpinsPerWorker;
-
+                int seed = Guid.NewGuid().GetHashCode();
+                var localRng = new FastRandom((uint)seed);
                 var localEngine = new CashVortexSlotEngine(config);
-                var localRng = new FastRandom((ulong)(123456789012345UL + (ulong)w * 9876543210987UL + (ulong)DateTime.UtcNow.Ticks));
+                int spinsForThisWorker = (w == workerCount - 1) ? (totalSpins - spinsPerWorker * (workerCount - 1)) : spinsPerWorker;
                 var localStats = new CashVortexSimWorkerStats(config);
 
                 for (int i = 0; i < spinsForThisWorker; i++)
@@ -195,6 +228,12 @@ class Program
             int megaStrikeHits = 0;
             int ultraStrikeHits = 0;
             int xWheelHits = 0;
+            long xWheelTotalWin = 0;
+
+            int[] wheelReachHits = new int[4];
+            long[] wheelRtpWin = new long[4];
+            var wheelPrizeHits = new Dictionary<string, int>();
+            var wheelPrizeWins = new Dictionary<string, long>();
 
             var jackpotHits = new Dictionary<string, int>();
             var jackpotWins = new Dictionary<string, long>();
@@ -219,6 +258,22 @@ class Program
                 megaStrikeHits += w.MegaStrikeHits;
                 ultraStrikeHits += w.UltraStrikeHits;
                 xWheelHits += w.XWheelHits;
+                xWheelTotalWin += w.XWheelTotalWin;
+
+                for (int l = 1; l <= 3; l++)
+                {
+                    wheelReachHits[l] += w.WheelReachHits[l];
+                    wheelRtpWin[l] += w.WheelRtpWin[l];
+                }
+
+                foreach (var kvp in w.WheelPrizeHits)
+                {
+                    wheelPrizeHits[kvp.Key] = wheelPrizeHits.GetValueOrDefault(kvp.Key) + kvp.Value;
+                }
+                foreach (var kvp in w.WheelPrizeWins)
+                {
+                    wheelPrizeWins[kvp.Key] = wheelPrizeWins.GetValueOrDefault(kvp.Key) + kvp.Value;
+                }
 
                 foreach (var kvp in w.JackpotHits)
                 {
@@ -232,11 +287,13 @@ class Program
 
             double totalRtp = (double)totalWin / (totalSpins * 100.0);
             double lineWinRtp = (double)totalLineWin / (totalSpins * 100.0);
+            double xWheelRtp = (double)xWheelTotalWin / (totalSpins * 100.0);
             double hitFreq = (double)winSpins / totalSpins;
 
             Console.WriteLine($"\nSimulation complete!");
             Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
             Console.WriteLine($"    - Line Payout RTP: {lineWinRtp:P2}");
+            Console.WriteLine($"    - X Wheel Feature Direct RTP: {xWheelRtp:P2}");
             Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
             Console.WriteLine($"  - Total Slingo Lines Completed: {totalSlingoLines:N0} (1 in {((double)totalSpins / Math.Max(1, totalSlingoLines)):F2} spins)");
 
@@ -248,7 +305,43 @@ class Program
             Console.WriteLine($"  - Mini Strikes: {miniStrikeHits:N0}");
             Console.WriteLine($"  - Mega Strikes: {megaStrikeHits:N0}");
             Console.WriteLine($"  - Ultra Strikes: {ultraStrikeHits:N0}");
-            Console.WriteLine($"  - X Wheel Triggers: {xWheelHits:N0}");
+            Console.WriteLine($"  - X Wheel Triggers: {xWheelHits:N0} (Hit Chance: {((double)xWheelHits / totalSpins):P2})");
+
+            Console.WriteLine("\n[X Wheel Feature Breakdown]");
+            for (int wL = 1; wL <= 3; wL++)
+            {
+                string wName = wL == 1 ? "Mini Wheel (Wheel 1)" : (wL == 2 ? "Mega Wheel (Wheel 2)" : "Ultra Wheel (Wheel 3)");
+                int reach = wheelReachHits[wL];
+                double reachSpinsChance = (double)reach / totalSpins;
+                double reachTrigChance = xWheelHits > 0 ? (double)reach / xWheelHits : 0;
+                double wRtp = (double)wheelRtpWin[wL] / (totalSpins * 100.0);
+                Console.WriteLine($"  - {wName}: Reached = {reach:N0} times ({reachSpinsChance:P2} of spins | {reachTrigChance:P2} of triggers) | Direct RTP = {wRtp:P4}");
+            }
+
+            if (trackFullStats)
+            {
+                Console.WriteLine("\n[X Wheel Detailed Prize Stats]");
+                for (int wL = 1; wL <= 3; wL++)
+                {
+                    string wTag = $"W{wL}";
+                    string wTitle = wL == 1 ? "Wheel 1 (Mini)" : (wL == 2 ? "Wheel 2 (Mega)" : "Wheel 3 (Ultra)");
+                    int wheelTotalSpins = wheelReachHits[wL];
+                    Console.WriteLine($"  --- {wTitle} Prizes ---");
+
+                    var prizeList = wL == 1 ? config.MiniWheelPrizes : (wL == 2 ? config.MegaWheelPrizes : config.UltraWheelPrizes);
+                    foreach (var prizeDef in prizeList)
+                    {
+                        string pKey = $"{wTag}:{prizeDef.PrizeString}";
+                        int hits = wheelPrizeHits.GetValueOrDefault(pKey);
+                        long win = wheelPrizeWins.GetValueOrDefault(pKey);
+                        double hitChanceWheel = wheelTotalSpins > 0 ? (double)hits / wheelTotalSpins : 0;
+                        double hitChanceSpins = (double)hits / totalSpins;
+                        double prizeRtp = (double)win / (totalSpins * 100.0);
+
+                        Console.WriteLine($"    * {prizeDef.PrizeString,-15}: Hits = {hits,6:N0} | Wheel Chance = {hitChanceWheel,7:P2} | Total Chance = {hitChanceSpins,7:P4} | RTP = {prizeRtp,7:P4}");
+                    }
+                }
+            }
 
             Console.WriteLine("\n[Jackpot Breakdown]");
             foreach (var jp in config.JackpotCoins)
@@ -273,6 +366,7 @@ class Program
             ws.Cell(rowIdx, 1).Value = "Total Spins"; ws.Cell(rowIdx, 2).Value = totalSpins; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Total RTP"; ws.Cell(rowIdx, 2).Value = $"{totalRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Line Win RTP"; ws.Cell(rowIdx, 2).Value = $"{lineWinRtp:P2}"; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "X Wheel Direct RTP"; ws.Cell(rowIdx, 2).Value = $"{xWheelRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Hit Frequency"; ws.Cell(rowIdx, 2).Value = $"{hitFreq:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Slingo Lines Completed"; ws.Cell(rowIdx, 2).Value = totalSlingoLines; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Jackpot Coin Hits"; ws.Cell(rowIdx, 2).Value = jackpotCoinHits; rowIdx++;
@@ -284,16 +378,64 @@ class Program
             ws.Cell(rowIdx, 1).Value = "Ultra Strike Hits"; ws.Cell(rowIdx, 2).Value = ultraStrikeHits; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "X Wheel Triggers"; ws.Cell(rowIdx, 2).Value = xWheelHits; rowIdx++;
 
+            for (int wL = 1; wL <= 3; wL++)
+            {
+                ws.Cell(rowIdx, 1).Value = $"Wheel {wL} Reached Hits"; ws.Cell(rowIdx, 2).Value = wheelReachHits[wL]; rowIdx++;
+                ws.Cell(rowIdx, 1).Value = $"Wheel {wL} Direct RTP"; ws.Cell(rowIdx, 2).Value = $"{((double)wheelRtpWin[wL] / (totalSpins * 100.0)):P4}"; rowIdx++;
+            }
+
             ws.Columns().AdjustToContents();
+
+            // Add X Wheel Details Worksheet
+            var wsWheel = workbook.Worksheets.Add("X Wheel Details");
+            wsWheel.Cell(1, 1).Value = "Wheel";
+            wsWheel.Cell(1, 2).Value = "Prize";
+            wsWheel.Cell(1, 3).Value = "Hits";
+            wsWheel.Cell(1, 4).Value = "Wheel Hit Chance %";
+            wsWheel.Cell(1, 5).Value = "Total Spins Hit Chance %";
+            wsWheel.Cell(1, 6).Value = "Direct Win";
+            wsWheel.Cell(1, 7).Value = "Direct RTP %";
+            wsWheel.Row(1).Style.Font.Bold = true;
+
+            int wRow = 2;
+            for (int wL = 1; wL <= 3; wL++)
+            {
+                string wTag = $"W{wL}";
+                string wTitle = wL == 1 ? "Wheel 1 (Mini)" : (wL == 2 ? "Wheel 2 (Mega)" : "Wheel 3 (Ultra)");
+                int wheelTotalSpins = wheelReachHits[wL];
+                var prizeList = wL == 1 ? config.MiniWheelPrizes : (wL == 2 ? config.MegaWheelPrizes : config.UltraWheelPrizes);
+
+                foreach (var prizeDef in prizeList)
+                {
+                    string pKey = $"{wTag}:{prizeDef.PrizeString}";
+                    int hits = wheelPrizeHits.GetValueOrDefault(pKey);
+                    long win = wheelPrizeWins.GetValueOrDefault(pKey);
+                    double hitChanceWheel = wheelTotalSpins > 0 ? (double)hits / wheelTotalSpins : 0;
+                    double hitChanceSpins = (double)hits / totalSpins;
+                    double prizeRtp = (double)win / (totalSpins * 100.0);
+
+                    wsWheel.Cell(wRow, 1).Value = wTitle;
+                    wsWheel.Cell(wRow, 2).Value = prizeDef.PrizeString;
+                    wsWheel.Cell(wRow, 3).Value = hits;
+                    wsWheel.Cell(wRow, 4).Value = $"{hitChanceWheel:P2}";
+                    wsWheel.Cell(wRow, 5).Value = $"{hitChanceSpins:P4}";
+                    wsWheel.Cell(wRow, 6).Value = win;
+                    wsWheel.Cell(wRow, 7).Value = $"{prizeRtp:P4}";
+                    wRow++;
+                }
+            }
+
+            wsWheel.Columns().AdjustToContents();
+
             workbook.SaveAs(resultsPath);
             Console.WriteLine("Results successfully written to Excel workbook!");
+            Console.WriteLine("=========================================================================================");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"\n[ERROR] Simulation failed: {ex.Message}");
             Console.WriteLine(ex.StackTrace);
+            Console.WriteLine("=========================================================================================");
         }
-
-        Console.WriteLine("=========================================================================================");
     }
 }

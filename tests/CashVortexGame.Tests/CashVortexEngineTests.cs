@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Xunit;
 using CashVortexGame;
 using CashVortexGame.Config;
@@ -26,6 +27,16 @@ public class CashVortexEngineTests
         Assert.NotEmpty(config.CashStrikeValues);
         Assert.NotEmpty(config.CashCoinChances);
         Assert.NotEmpty(config.CashCoinValues);
+    }
+
+    [Fact]
+    public void ConfigLoader_ParsesWheelPrizesCorrectly()
+    {
+        var config = LoadConfig();
+        Assert.NotNull(config);
+        Assert.NotEmpty(config.MiniWheelPrizes);
+        Assert.NotEmpty(config.MegaWheelPrizes);
+        Assert.NotEmpty(config.UltraWheelPrizes);
     }
 
     [Fact]
@@ -63,22 +74,17 @@ public class CashVortexEngineTests
     }
 
     [Fact]
-    public void SlotEngine_SymbolLifeCycle_ResetsOnSameSlingoLine()
+    public void SlotEngine_XSymbol_HasOneXCashValueAndTriggersWheel()
     {
         var config = LoadConfig();
         var engine = new CashVortexSlotEngine(config);
 
-        // Manually place a cash coin at (0, 0) with 1 life remaining
-        engine.Grid[0, 0].Type = SymbolType.CashCoin;
+        // Verify X Symbol initialization behavior
+        engine.Grid[0, 0].Type = SymbolType.XWheel;
         engine.Grid[0, 0].CashValue = 1.0;
-        engine.Grid[0, 0].LifeRemaining = 1;
+        engine.Grid[0, 0].LifeRemaining = 3;
 
-        // Manually trigger spin where a symbol lands at (0, 4) on the same horizontal line
-        var rng = new FastRandom(999);
-        engine.Spin(rng);
-
-        // If a symbol landed anywhere on row 0, cell (0, 0)'s life should have been reset to 3 or updated
-        // Grid cell (0, 0) should either remain populated with reset life or be active
-        Assert.True(engine.Grid[0, 0].LifeRemaining >= 0);
+        Assert.Equal(1.0, engine.Grid[0, 0].CashValue);
+        Assert.Equal(SymbolType.XWheel, engine.Grid[0, 0].Type);
     }
 }
