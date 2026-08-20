@@ -87,7 +87,7 @@ public class CashVortexExcelLoader
         dataTable ??= result.Tables[result.Tables.Count - 1];
         ParseDataTableDynamic(dataTable, config);
 
-        EnsureDefaultWheelPrizes(config);
+        EnsureDefaultConfigTables(config);
         config.BuildWeightTables();
         return config;
     }
@@ -104,6 +104,9 @@ public class CashVortexExcelLoader
         int miniWheelCount = 0;
         int megaWheelCount = 0;
         int ultraWheelCount = 0;
+
+        bool inBonusSection = false;
+        int bonusOutcomeCount = 0;
 
         for (int r = 0; r < dataTable.Rows.Count; r++)
         {
@@ -131,14 +134,32 @@ public class CashVortexExcelLoader
                 currentSection = "Special Symbols";
                 continue;
             }
+            else if (checkStr.StartsWith("Slingo Ladder", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "Slingo Ladder";
+                inBonusSection = true;
+                continue;
+            }
+            else if (checkStr.StartsWith("Symbol Landing Chance", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "Symbol Landing Chance";
+                inBonusSection = true;
+                continue;
+            }
+            else if (checkStr.StartsWith("Symbols Landing", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "Symbols Landing Selections";
+                inBonusSection = true;
+                continue;
+            }
             else if (checkStr.StartsWith("Jackpot Coins", StringComparison.OrdinalIgnoreCase))
             {
-                currentSection = "Jackpot Coins";
+                currentSection = inBonusSection ? "Bonus Jackpot Coins" : "Jackpot Coins";
                 continue;
             }
             else if (checkStr.StartsWith("Cash Strikes", StringComparison.OrdinalIgnoreCase))
             {
-                currentSection = "Cash Strikes";
+                currentSection = inBonusSection ? "Bonus Cash Strikes" : "Cash Strikes";
                 continue;
             }
             else if (checkStr.StartsWith("Cash Coins Chance", StringComparison.OrdinalIgnoreCase))
@@ -149,22 +170,22 @@ public class CashVortexExcelLoader
             else if (checkStr.StartsWith("Cash Coins", StringComparison.OrdinalIgnoreCase) ||
                      checkStr.StartsWith("For each landing Cash Coin", StringComparison.OrdinalIgnoreCase))
             {
-                currentSection = "Cash Coins";
+                currentSection = inBonusSection ? "Bonus Cash Coins" : "Cash Coins";
                 continue;
             }
             else if (checkStr.StartsWith("Mini Wheel", StringComparison.OrdinalIgnoreCase) || checkStr.StartsWith("Wheel 1", StringComparison.OrdinalIgnoreCase))
             {
-                currentSection = "Mini Wheel";
+                currentSection = inBonusSection ? "Bonus Mini Wheel" : "Mini Wheel";
                 continue;
             }
             else if (checkStr.StartsWith("Mega Wheel", StringComparison.OrdinalIgnoreCase) || checkStr.StartsWith("Wheel 2", StringComparison.OrdinalIgnoreCase))
             {
-                currentSection = "Mega Wheel";
+                currentSection = inBonusSection ? "Bonus Mega Wheel" : "Mega Wheel";
                 continue;
             }
             else if (checkStr.StartsWith("Ultra Wheel", StringComparison.OrdinalIgnoreCase) || checkStr.StartsWith("Wheel 3", StringComparison.OrdinalIgnoreCase))
             {
-                currentSection = "Ultra Wheel";
+                currentSection = inBonusSection ? "Bonus Ultra Wheel" : "Ultra Wheel";
                 continue;
             }
 
@@ -173,6 +194,7 @@ public class CashVortexExcelLoader
                 col0.Equals("SymbolID", StringComparison.OrdinalIgnoreCase) ||
                 col0.Equals("JackpotID", StringComparison.OrdinalIgnoreCase) ||
                 col0.Equals("PrizeID", StringComparison.OrdinalIgnoreCase) ||
+                col0.Equals("Spaces Left", StringComparison.OrdinalIgnoreCase) ||
                 col0.StartsWith("Pays", StringComparison.OrdinalIgnoreCase) ||
                 col0.Equals("Total", StringComparison.OrdinalIgnoreCase))
             {
@@ -288,8 +310,202 @@ public class CashVortexExcelLoader
                         config.UltraWheelPrizes.Add(ultraPrize);
                     }
                     break;
+
+                // --- Lock & Slingo Bonus Parsers ---
+                case "Slingo Ladder":
+                    if (TryParseInt(row, 0, out int slingoCount))
+                    {
+                        string prizeStr = GetCellString(row, 1).Trim();
+                        var ladderPrize = ParseSlingoLadderPrize(slingoCount, prizeStr);
+                        config.SlingoLadderPrizes.Add(ladderPrize);
+                    }
+                    break;
+
+                case "Symbol Landing Chance":
+                    if (col0.StartsWith("Base Factor", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (TryParseInt(row, 1, out int bf) && bf > 0)
+                        {
+                            config.BonusBaseFactor = bf;
+                        }
+                    }
+                    else if (col0.Contains("Lives", StringComparison.OrdinalIgnoreCase) || col0.Contains("Life", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int lives = col0.Contains("3") ? 3 : (col0.Contains("2") ? 2 : 1);
+                        for (int b = 0; b < 5; b++)
+                        {
+                            if (TryParseInt(row, b + 1, out int w))
+                            {
+                                config.BonusLandingWeightsByLifeAndBucket[lives, b] = w;
+                            }
+                        }
+                    }
+                    break;
+
+                case "Symbols Landing Selections":
+                    if (!string.IsNullOrEmpty(col0) && !col0.StartsWith("Spaces", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var outcomeDef = new BonusOutcomeDef
+                        {
+                            OutcomeId = bonusOutcomeCount++,
+                            Description = col0,
+                            Items = ParseBonusOutcomeItems(col0)
+                        };
+                        for (int b = 0; b < 5; b++)
+                        {
+                            if (TryParseInt(row, b + 1, out int w))
+                            {
+                                outcomeDef.WeightsBySpaceBucket[b] = w;
+                            }
+                        }
+                        config.BonusOutcomeDefs.Add(outcomeDef);
+                    }
+                    break;
+
+                case "Bonus Jackpot Coins":
+                    if (TryParseDouble(row, 1, out double bJpMult) && TryParseInt(row, 2, out int bJpWeight))
+                    {
+                        config.BonusJackpotCoins.Add(new JackpotCoinDef
+                        {
+                            JackpotName = col0,
+                            Multiplier = bJpMult,
+                            Weight = bJpWeight
+                        });
+                    }
+                    break;
+
+                case "Bonus Cash Strikes":
+                    if (col0.Contains("Strike", StringComparison.OrdinalIgnoreCase) && TryParseInt(row, 1, out int strTypeW))
+                    {
+                        config.BonusCashStrikeTypes.Add(new SpecialSymbolDef
+                        {
+                            SymbolName = col0,
+                            Weight = strTypeW
+                        });
+                    }
+                    else if (TryParseDouble(row, 0, out double bStrikeVal) && TryParseInt(row, 1, out int bStrikeValW))
+                    {
+                        config.BonusCashStrikeValues.Add(new CashValueDef
+                        {
+                            Multiplier = bStrikeVal,
+                            Weight = bStrikeValW
+                        });
+                    }
+                    break;
+
+                case "Bonus Cash Coins":
+                    if (TryParseDouble(row, 0, out double bCoinVal) && TryParseInt(row, 1, out int bCoinValW))
+                    {
+                        config.BonusCashCoinValues.Add(new CashValueDef
+                        {
+                            Multiplier = bCoinVal,
+                            Weight = bCoinValW
+                        });
+                    }
+                    break;
+
+                case "Bonus Mini Wheel":
+                    if (TryParseWheelPrize(row, config.BonusMiniWheelPrizes.Count, out var bMiniPrize))
+                    {
+                        config.BonusMiniWheelPrizes.Add(bMiniPrize);
+                    }
+                    break;
+
+                case "Bonus Mega Wheel":
+                    if (TryParseWheelPrize(row, config.BonusMegaWheelPrizes.Count, out var bMegaPrize))
+                    {
+                        config.BonusMegaWheelPrizes.Add(bMegaPrize);
+                    }
+                    break;
+
+                case "Bonus Ultra Wheel":
+                    if (TryParseWheelPrize(row, config.BonusUltraWheelPrizes.Count, out var bUltraPrize))
+                    {
+                        config.BonusUltraWheelPrizes.Add(bUltraPrize);
+                    }
+                    break;
             }
         }
+    }
+
+    private static SlingoLadderPrizeDef ParseSlingoLadderPrize(int slingoCount, string prizeStr)
+    {
+        var ladderPrize = new SlingoLadderPrizeDef
+        {
+            SlingoCount = slingoCount,
+            PrizeString = prizeStr
+        };
+
+        if (string.IsNullOrEmpty(prizeStr) || prizeStr == "0")
+        {
+            ladderPrize.Type = WheelPrizeType.Multiplier;
+            ladderPrize.ParameterValue = 0;
+            return ladderPrize;
+        }
+
+        if (prizeStr.StartsWith("x", StringComparison.OrdinalIgnoreCase))
+        {
+            ladderPrize.Type = WheelPrizeType.Multiplier;
+            if (double.TryParse(prizeStr.Substring(1), out double m)) ladderPrize.ParameterValue = m;
+        }
+        else if (prizeStr.Contains("Jackpot", StringComparison.OrdinalIgnoreCase))
+        {
+            ladderPrize.Type = WheelPrizeType.Jackpot;
+            if (prizeStr.Contains("Mini", StringComparison.OrdinalIgnoreCase)) ladderPrize.JackpotType = "Mini";
+            else if (prizeStr.Contains("Mega", StringComparison.OrdinalIgnoreCase)) ladderPrize.JackpotType = "Mega";
+            else if (prizeStr.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) ladderPrize.JackpotType = "Ultra";
+        }
+        else if (double.TryParse(prizeStr, out double strikeVal))
+        {
+            ladderPrize.Type = WheelPrizeType.UltraStrike;
+            ladderPrize.ParameterValue = strikeVal;
+        }
+
+        return ladderPrize;
+    }
+
+    private static List<BonusOutcomeItem> ParseBonusOutcomeItems(string desc)
+    {
+        var list = new List<BonusOutcomeItem>();
+        var parts = desc.Split('+', StringSplitOptions.TrimEntries);
+
+        foreach (var part in parts)
+        {
+            string p = part.Trim();
+            int count = 1;
+            if (char.IsDigit(p[0]))
+            {
+                int spaceIdx = p.IndexOf(' ');
+                if (spaceIdx > 0 && int.TryParse(p.Substring(0, spaceIdx), out int c))
+                {
+                    count = c;
+                    p = p.Substring(spaceIdx + 1).Trim();
+                }
+            }
+
+            if (p.Contains("Jackpot", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(new BonusOutcomeItem { Type = SymbolType.JackpotCoin, Count = count });
+            }
+            else if (p.Contains("Vortex", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(new BonusOutcomeItem { Type = SymbolType.MiniVortex, Count = count });
+            }
+            else if (p.Contains("Strike", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(new BonusOutcomeItem { Type = SymbolType.MiniStrike, Count = count });
+            }
+            else if (p.Contains("X", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(new BonusOutcomeItem { Type = SymbolType.XWheel, Count = count });
+            }
+            else
+            {
+                list.Add(new BonusOutcomeItem { Type = SymbolType.CashCoin, Count = count });
+            }
+        }
+
+        return list;
     }
 
     private static bool TryParseWheelPrize(DataRow row, int defaultId, out WheelPrizeDef prize)
@@ -359,7 +575,7 @@ public class CashVortexExcelLoader
         return prize;
     }
 
-    private static void EnsureDefaultWheelPrizes(CashVortexConfig config)
+    private static void EnsureDefaultConfigTables(CashVortexConfig config)
     {
         if (config.TableSelections.Count == 0)
         {
@@ -443,6 +659,47 @@ public class CashVortexExcelLoader
             config.UltraWheelPrizes.Add(ParsePrizeDef(1, "5", 1000));
             config.UltraWheelPrizes.Add(ParsePrizeDef(2, "Ultra Jackpot", 100));
             config.UltraWheelPrizes.Add(ParsePrizeDef(3, "Lock & Slingo", 500));
+        }
+
+        // Lock & Slingo Bonus Defaults
+        if (config.SlingoLadderPrizes.Count == 0)
+        {
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(1, "0"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(2, "0"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(3, "0"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(4, "Mini Jackpot"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(5, "1"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(6, "2"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(7, "3"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(8, "Mega Jackpot"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(9, "5"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(10, "x2"));
+            config.SlingoLadderPrizes.Add(ParseSlingoLadderPrize(12, "Ultra Jackpot"));
+        }
+
+        if (config.BonusCashStrikeTypes.Count == 0)
+        {
+            config.BonusCashStrikeTypes.Add(new SpecialSymbolDef { SymbolName = "Mini Strike", Weight = 1000 });
+            config.BonusCashStrikeTypes.Add(new SpecialSymbolDef { SymbolName = "Mega Strike", Weight = 300 });
+            config.BonusCashStrikeTypes.Add(new SpecialSymbolDef { SymbolName = "Ultra Strike", Weight = 50 });
+        }
+
+        if (config.BonusOutcomeDefs.Count == 0)
+        {
+            config.BonusOutcomeDefs.Add(new BonusOutcomeDef
+            {
+                OutcomeId = 0,
+                Description = "1 Cash Coin",
+                WeightsBySpaceBucket = new[] { 1000, 1000, 1000, 1000, 1000 },
+                Items = new List<BonusOutcomeItem> { new() { Type = SymbolType.CashCoin, Count = 1 } }
+            });
+            config.BonusOutcomeDefs.Add(new BonusOutcomeDef
+            {
+                OutcomeId = 1,
+                Description = "2 Cash Coins",
+                WeightsBySpaceBucket = new[] { 400, 300, 200, 100, 0 },
+                Items = new List<BonusOutcomeItem> { new() { Type = SymbolType.CashCoin, Count = 2 } }
+            });
         }
     }
 

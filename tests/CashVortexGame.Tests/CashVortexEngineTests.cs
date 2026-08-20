@@ -4,6 +4,7 @@ using System.Linq;
 using Xunit;
 using CashVortexGame;
 using CashVortexGame.Config;
+using SlotFramework.Models;
 using SlotFramework.Utilities;
 
 namespace CashVortexGame.Tests;
@@ -37,6 +38,16 @@ public class CashVortexEngineTests
         Assert.NotEmpty(config.MiniWheelPrizes);
         Assert.NotEmpty(config.MegaWheelPrizes);
         Assert.NotEmpty(config.UltraWheelPrizes);
+    }
+
+    [Fact]
+    public void ConfigLoader_ParsesLockAndSlingoCorrectly()
+    {
+        var config = LoadConfig();
+        Assert.NotNull(config);
+        Assert.NotEmpty(config.SlingoLadderPrizes);
+        Assert.True(config.BonusBaseFactor > 0);
+        Assert.NotEmpty(config.BonusOutcomeDefs);
     }
 
     [Fact]
@@ -103,5 +114,23 @@ public class CashVortexEngineTests
         // Verify that Jackpot Coin remains intact with its fixed 5.0 value
         Assert.Equal(5.0, engine.Grid[0, 0].CashValue);
         Assert.Equal(SymbolType.JackpotCoin, engine.Grid[0, 0].Type);
+    }
+
+    [Fact]
+    public void SlotEngine_LockAndSlingoBonus_PlaysAndCompletesValidly()
+    {
+        var config = LoadConfig();
+        var engine = new CashVortexSlotEngine(config);
+        var rng = new FastRandom(999);
+        var spinResult = new SpinResult();
+
+        engine.PlayLockAndSlingoBonus(rng, spinResult);
+
+        Assert.NotEmpty(spinResult.TriggeredPotBonuses);
+        var lnsRecord = spinResult.TriggeredPotBonuses.FirstOrDefault(b => b.BonusName == "Lock & Slingo");
+        Assert.NotNull(lnsRecord);
+        Assert.True(lnsRecord.Win >= 0);
+        Assert.True(lnsRecord.SpinsPlayed >= 1);
+        Assert.True(lnsRecord.CompletedSlingos >= 0 && lnsRecord.CompletedSlingos <= 12);
     }
 }

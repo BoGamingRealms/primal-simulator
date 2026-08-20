@@ -2,12 +2,13 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using CashVortexGame;
 using CashVortexGame.Config;
-using SlotFramework.Utilities;
 using SlotFramework.Models;
+using SlotFramework.Utilities;
 
 namespace CashVortexSimulator;
 
@@ -37,6 +38,14 @@ public class CashVortexSimWorkerStats
     public Dictionary<string, int> JackpotHits { get; set; } = new();
     public Dictionary<string, long> JackpotWins { get; set; } = new();
 
+    // Lock & Slingo Bonus stats
+    public int LockAndSlingoTriggers { get; set; }
+    public long LockAndSlingoTotalWin { get; set; }
+    public long LockAndSlingoTotalSpinsPlayed { get; set; }
+    public long LockAndSlingoTotalSlingos { get; set; }
+    public int LockAndSlingoFullHouses { get; set; }
+    public int[] LockAndSlingoLadderHits { get; set; } = new int[13];
+
     public CashVortexSimWorkerStats(CashVortexConfig config)
     {
         foreach (var jp in config.JackpotCoins)
@@ -63,7 +72,7 @@ public class CashVortexSimWorkerStats
 
         foreach (var pot in result.TriggeredPotBonuses)
         {
-            if (pot.BonusName.StartsWith("XWheel:"))
+            if (pot.BonusName.StartsWith("XWheel:") || pot.BonusName.StartsWith("CenterWheel:"))
             {
                 XWheelTotalWin += pot.Win;
                 var parts = pot.BonusName.Split(':');
@@ -80,6 +89,20 @@ public class CashVortexSimWorkerStats
                         WheelPrizeHits[prizeKey] = WheelPrizeHits.GetValueOrDefault(prizeKey) + 1;
                         WheelPrizeWins[prizeKey] = WheelPrizeWins.GetValueOrDefault(prizeKey) + pot.Win;
                     }
+                }
+            }
+            else if (pot.BonusName.Equals("Lock & Slingo", StringComparison.OrdinalIgnoreCase))
+            {
+                LockAndSlingoTriggers++;
+                LockAndSlingoTotalWin += pot.Win;
+                LockAndSlingoTotalSpinsPlayed += pot.SpinsPlayed;
+                LockAndSlingoTotalSlingos += pot.CompletedSlingos;
+
+                int slingoIdx = Math.Clamp(pot.CompletedSlingos, 0, 12);
+                LockAndSlingoLadderHits[slingoIdx]++;
+                if (slingoIdx == 12)
+                {
+                    LockAndSlingoFullHouses++;
                 }
             }
         }
@@ -131,9 +154,9 @@ class Program
         {
             localDefault = "CashVortexTriplePower95.xlsx";
         }
-        
+
         string configSource = File.Exists(localDefault) ? localDefault : CashVortexExcelLoader.DefaultGoogleSheetUrl;
-        string resultsPath = Directory.Exists(downloadsFolder) 
+        string resultsPath = Directory.Exists(downloadsFolder)
             ? Path.Combine(downloadsFolder, "CashVortexTriplePower95_Results.xlsx")
             : "CashVortexTriplePower95_Results.xlsx";
 
@@ -183,6 +206,9 @@ class Program
             Console.WriteLine($"Mini Wheel Prizes: {config.MiniWheelPrizes.Count}");
             Console.WriteLine($"Mega Wheel Prizes: {config.MegaWheelPrizes.Count}");
             Console.WriteLine($"Ultra Wheel Prizes: {config.UltraWheelPrizes.Count}");
+            Console.WriteLine($"Slingo Ladder Prizes: {config.SlingoLadderPrizes.Count}");
+            Console.WriteLine($"Bonus Landing Base Factor: {config.BonusBaseFactor}");
+            Console.WriteLine($"Bonus Outcome Types: {config.BonusOutcomeDefs.Count}");
             Console.WriteLine("-------------------------------------------------------------------------------------\n");
 
             int totalSpins = 1_000_000;
@@ -190,9 +216,9 @@ class Program
             int spinsPerWorker = totalSpins / workerCount;
             var workers = new CashVortexSimWorkerStats[workerCount];
 
-            Console.WriteLine($"Generating real simulation results ({totalSpins:N0} spins)...");
+            Console.WriteLine($"Generating real simulation results ({totalSpins:N0} spins)...\n");
 
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var sw = Stopwatch.StartNew();
 
             Parallel.For(0, workerCount, w =>
             {
@@ -212,7 +238,7 @@ class Program
             });
 
             sw.Stop();
-            Console.WriteLine($"\nSimulation finished in {sw.ElapsedMilliseconds} ms ({totalSpins / (sw.Elapsed.TotalSeconds):N0} spins/sec across {workerCount} CPU threads)!");
+            Console.WriteLine($"Simulation finished in {sw.ElapsedMilliseconds} ms ({totalSpins / (sw.Elapsed.TotalSeconds):N0} spins/sec across {workerCount} CPU threads)!");
 
             // Aggregating statistics
             long totalWin = 0;
@@ -234,6 +260,13 @@ class Program
             long[] wheelRtpWin = new long[4];
             var wheelPrizeHits = new Dictionary<string, int>();
             var wheelPrizeWins = new Dictionary<string, long>();
+
+            int lockAndSlingoTriggers = 0;
+            long lockAndSlingoTotalWin = 0;
+            long lockAndSlingoTotalSpinsPlayed = 0;
+            long lockAndSlingoTotalSlingos = 0;
+            int lockAndSlingoFullHouses = 0;
+            int[] lockAndSlingoLadderHits = new int[13];
 
             var jackpotHits = new Dictionary<string, int>();
             var jackpotWins = new Dictionary<string, long>();
@@ -259,6 +292,16 @@ class Program
                 ultraStrikeHits += w.UltraStrikeHits;
                 xWheelHits += w.XWheelHits;
                 xWheelTotalWin += w.XWheelTotalWin;
+
+                lockAndSlingoTriggers += w.LockAndSlingoTriggers;
+                lockAndSlingoTotalWin += w.LockAndSlingoTotalWin;
+                lockAndSlingoTotalSpinsPlayed += w.LockAndSlingoTotalSpinsPlayed;
+                lockAndSlingoTotalSlingos += w.LockAndSlingoTotalSlingos;
+                lockAndSlingoFullHouses += w.LockAndSlingoFullHouses;
+                for (int s = 0; s <= 12; s++)
+                {
+                    lockAndSlingoLadderHits[s] += w.LockAndSlingoLadderHits[s];
+                }
 
                 for (int l = 1; l <= 3; l++)
                 {
@@ -288,14 +331,29 @@ class Program
             double totalRtp = (double)totalWin / (totalSpins * 100.0);
             double lineWinRtp = (double)totalLineWin / (totalSpins * 100.0);
             double xWheelRtp = (double)xWheelTotalWin / (totalSpins * 100.0);
+            double lockAndSlingoRtp = (double)lockAndSlingoTotalWin / (totalSpins * 100.0);
             double hitFreq = (double)winSpins / totalSpins;
 
             Console.WriteLine($"\nSimulation complete!");
             Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
             Console.WriteLine($"    - Line Payout RTP: {lineWinRtp:P2}");
-            Console.WriteLine($"    - X Wheel Feature Direct RTP: {xWheelRtp:P2}");
+            Console.WriteLine($"    - Wheel Features Direct RTP: {xWheelRtp:P2}");
+            Console.WriteLine($"    - Lock & Slingo™ Bonus RTP: {lockAndSlingoRtp:P2}");
             Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
             Console.WriteLine($"  - Total Slingo Lines Completed: {totalSlingoLines:N0} (1 in {((double)totalSpins / Math.Max(1, totalSlingoLines)):F2} spins)");
+
+            Console.WriteLine("\n[Lock & Slingo™ Bonus Breakdown]");
+            double lnsTrigChance = (double)lockAndSlingoTriggers / totalSpins;
+            double avgLnsWin = lockAndSlingoTriggers > 0 ? (double)lockAndSlingoTotalWin / (lockAndSlingoTriggers * 100.0) : 0;
+            double avgLnsSpins = lockAndSlingoTriggers > 0 ? (double)lockAndSlingoTotalSpinsPlayed / lockAndSlingoTriggers : 0;
+            double avgLnsSlingos = lockAndSlingoTriggers > 0 ? (double)lockAndSlingoTotalSlingos / lockAndSlingoTriggers : 0;
+
+            Console.WriteLine($"  - Total Triggers: {lockAndSlingoTriggers:N0} (1 in {((double)totalSpins / Math.Max(1, lockAndSlingoTriggers)):F2} spins | {lnsTrigChance:P4})");
+            Console.WriteLine($"  - Total Bonus RTP: {lockAndSlingoRtp:P2}");
+            Console.WriteLine($"  - Average Bonus Win: {avgLnsWin:F2}x bet");
+            Console.WriteLine($"  - Average Spins per Bonus: {avgLnsSpins:F2}");
+            Console.WriteLine($"  - Average Slingos per Bonus: {avgLnsSlingos:F2}");
+            Console.WriteLine($"  - Full House Hits (25 cells): {lockAndSlingoFullHouses:N0} ({((double)lockAndSlingoFullHouses / Math.Max(1, lockAndSlingoTriggers)):P2} of bonuses)");
 
             Console.WriteLine("\n[Special Symbol Hits]");
             Console.WriteLine($"  - Jackpot Coins: {jackpotCoinHits:N0}");
@@ -307,7 +365,7 @@ class Program
             Console.WriteLine($"  - Ultra Strikes: {ultraStrikeHits:N0}");
             Console.WriteLine($"  - X Wheel Triggers: {xWheelHits:N0} (Hit Chance: {((double)xWheelHits / totalSpins):P2})");
 
-            Console.WriteLine("\n[X Wheel Feature Breakdown]");
+            Console.WriteLine("\n[Wheel Feature Breakdown]");
             for (int wL = 1; wL <= 3; wL++)
             {
                 string wName = wL == 1 ? "Mini Wheel (Wheel 1)" : (wL == 2 ? "Mega Wheel (Wheel 2)" : "Ultra Wheel (Wheel 3)");
@@ -320,7 +378,7 @@ class Program
 
             if (trackFullStats)
             {
-                Console.WriteLine("\n[X Wheel Detailed Prize Stats]");
+                Console.WriteLine("\n[Wheel Detailed Prize Stats]");
                 for (int wL = 1; wL <= 3; wL++)
                 {
                     string wTag = $"W{wL}";
@@ -340,6 +398,15 @@ class Program
 
                         Console.WriteLine($"    * {prizeDef.PrizeString,-15}: Hits = {hits,6:N0} | Wheel Chance = {hitChanceWheel,7:P2} | Total Chance = {hitChanceSpins,7:P4} | RTP = {prizeRtp,7:P4}");
                     }
+                }
+
+                Console.WriteLine("\n[Lock & Slingo Ladder Achievements]");
+                for (int s = 0; s <= 12; s++)
+                {
+                    if (s == 11) continue; // Ladder skips 11
+                    int sHits = lockAndSlingoLadderHits[s];
+                    double sChance = lockAndSlingoTriggers > 0 ? (double)sHits / lockAndSlingoTriggers : 0;
+                    Console.WriteLine($"  - Slingo {s,2} Line(s): Hits = {sHits,6:N0} | {sChance,7:P2} of bonus rounds");
                 }
             }
 
@@ -366,9 +433,13 @@ class Program
             ws.Cell(rowIdx, 1).Value = "Total Spins"; ws.Cell(rowIdx, 2).Value = totalSpins; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Total RTP"; ws.Cell(rowIdx, 2).Value = $"{totalRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Line Win RTP"; ws.Cell(rowIdx, 2).Value = $"{lineWinRtp:P2}"; rowIdx++;
-            ws.Cell(rowIdx, 1).Value = "X Wheel Direct RTP"; ws.Cell(rowIdx, 2).Value = $"{xWheelRtp:P2}"; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Wheel Features Direct RTP"; ws.Cell(rowIdx, 2).Value = $"{xWheelRtp:P2}"; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Lock & Slingo™ Bonus RTP"; ws.Cell(rowIdx, 2).Value = $"{lockAndSlingoRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Hit Frequency"; ws.Cell(rowIdx, 2).Value = $"{hitFreq:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Slingo Lines Completed"; ws.Cell(rowIdx, 2).Value = totalSlingoLines; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Lock & Slingo Triggers"; ws.Cell(rowIdx, 2).Value = lockAndSlingoTriggers; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Average Bonus Win (x bet)"; ws.Cell(rowIdx, 2).Value = $"{avgLnsWin:F2}"; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Full House Hits"; ws.Cell(rowIdx, 2).Value = lockAndSlingoFullHouses; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Jackpot Coin Hits"; ws.Cell(rowIdx, 2).Value = jackpotCoinHits; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Mini Vortex Hits"; ws.Cell(rowIdx, 2).Value = miniVortexHits; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Mega Vortex Hits"; ws.Cell(rowIdx, 2).Value = megaVortexHits; rowIdx++;
@@ -387,7 +458,7 @@ class Program
             ws.Columns().AdjustToContents();
 
             // Add X Wheel Details Worksheet
-            var wsWheel = workbook.Worksheets.Add("X Wheel Details");
+            var wsWheel = workbook.Worksheets.Add("Wheel Details");
             wsWheel.Cell(1, 1).Value = "Wheel";
             wsWheel.Cell(1, 2).Value = "Prize";
             wsWheel.Cell(1, 3).Value = "Hits";
@@ -424,8 +495,31 @@ class Program
                     wRow++;
                 }
             }
-
             wsWheel.Columns().AdjustToContents();
+
+            // Add Lock & Slingo Details Worksheet
+            var wsLns = workbook.Worksheets.Add("Lock & Slingo Details");
+            wsLns.Cell(1, 1).Value = "Slingo Level";
+            wsLns.Cell(1, 2).Value = "Hits";
+            wsLns.Cell(1, 3).Value = "Bonus Round Hit Chance %";
+            wsLns.Cell(1, 4).Value = "Total Spins Hit Chance %";
+            wsLns.Row(1).Style.Font.Bold = true;
+
+            int lnsRow = 2;
+            for (int s = 0; s <= 12; s++)
+            {
+                if (s == 11) continue;
+                int sHits = lockAndSlingoLadderHits[s];
+                double sChance = lockAndSlingoTriggers > 0 ? (double)sHits / lockAndSlingoTriggers : 0;
+                double sChanceSpins = (double)sHits / totalSpins;
+
+                wsLns.Cell(lnsRow, 1).Value = $"Slingo {s}";
+                wsLns.Cell(lnsRow, 2).Value = sHits;
+                wsLns.Cell(lnsRow, 3).Value = $"{sChance:P2}";
+                wsLns.Cell(lnsRow, 4).Value = $"{sChanceSpins:P4}";
+                lnsRow++;
+            }
+            wsLns.Columns().AdjustToContents();
 
             workbook.SaveAs(resultsPath);
             Console.WriteLine("Results successfully written to Excel workbook!");
