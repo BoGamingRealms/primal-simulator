@@ -12,7 +12,8 @@ public enum WheelPrizeType
     UltraStrike,
     Jackpot,
     LockAndSlingo,
-    Upgrade
+    Upgrade,
+    InstantCash
 }
 
 public class WheelPrizeDef
@@ -105,9 +106,13 @@ public class CashVortexConfig
     public List<CashCoinChance> CashCoinChances { get; set; } = new();
     public List<CashValueDef> CashCoinValues { get; set; } = new();
 
+    // 3-Wheel System at top of reels (Triggered by X Symbol)
     public List<WheelPrizeDef> MiniWheelPrizes { get; set; } = new();
     public List<WheelPrizeDef> MegaWheelPrizes { get; set; } = new();
     public List<WheelPrizeDef> UltraWheelPrizes { get; set; } = new();
+
+    // Center Wild Slingo Wheel Bonus (Triggered by lines passing through center wild star)
+    public List<WheelPrizeDef> CenterWheelPrizes { get; set; } = new();
 
     // Lock & Slingo Bonus Config
     public List<SlingoLadderPrizeDef> SlingoLadderPrizes { get; set; } = new();
@@ -135,6 +140,7 @@ public class CashVortexConfig
     public WeightTable MiniWheelWeightTable { get; set; } = new(Array.Empty<int>());
     public WeightTable MegaWheelWeightTable { get; set; } = new(Array.Empty<int>());
     public WeightTable UltraWheelWeightTable { get; set; } = new(Array.Empty<int>());
+    public WeightTable CenterWheelWeightTable { get; set; } = new(Array.Empty<int>());
 
     // Bonus sampling structures
     public WeightTable[] BonusOutcomeWeightsByBucket { get; set; } = Array.Empty<WeightTable>();
@@ -172,6 +178,7 @@ public class CashVortexConfig
         MiniWheelWeightTable = new WeightTable(MiniWheelPrizes.Select(p => p.Weight).ToArray());
         MegaWheelWeightTable = new WeightTable(MegaWheelPrizes.Select(p => p.Weight).ToArray());
         UltraWheelWeightTable = new WeightTable(UltraWheelPrizes.Select(p => p.Weight).ToArray());
+        CenterWheelWeightTable = new WeightTable(CenterWheelPrizes.Select(p => p.Weight).ToArray());
 
         // Build Bonus Weight Tables
         BonusOutcomeWeightsByBucket = new WeightTable[5];

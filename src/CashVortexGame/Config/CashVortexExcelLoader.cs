@@ -104,6 +104,7 @@ public class CashVortexExcelLoader
         int miniWheelCount = 0;
         int megaWheelCount = 0;
         int ultraWheelCount = 0;
+        int centerWheelCount = 0;
 
         bool inBonusSection = false;
         int bonusOutcomeCount = 0;
@@ -132,6 +133,11 @@ public class CashVortexExcelLoader
             else if (checkStr.StartsWith("Special Symbol", StringComparison.OrdinalIgnoreCase))
             {
                 currentSection = "Special Symbols";
+                continue;
+            }
+            else if (checkStr.StartsWith("Wheel Bonus", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "Wheel Bonus";
                 continue;
             }
             else if (checkStr.StartsWith("Slingo Ladder", StringComparison.OrdinalIgnoreCase))
@@ -308,6 +314,13 @@ public class CashVortexExcelLoader
                     if (TryParseWheelPrize(row, ultraWheelCount++, out var ultraPrize))
                     {
                         config.UltraWheelPrizes.Add(ultraPrize);
+                    }
+                    break;
+
+                case "Wheel Bonus":
+                    if (TryParseCenterWheelPrize(row, centerWheelCount++, out var centerPrize))
+                    {
+                        config.CenterWheelPrizes.Add(centerPrize);
                     }
                     break;
 
@@ -508,6 +521,19 @@ public class CashVortexExcelLoader
         return list;
     }
 
+    private static bool TryParseCenterWheelPrize(DataRow row, int defaultId, out WheelPrizeDef prize)
+    {
+        prize = new WheelPrizeDef();
+        string col0 = GetCellString(row, 0).Trim();
+        string col1 = GetCellString(row, 1).Trim();
+
+        if (string.IsNullOrEmpty(col0) || col0.StartsWith("Wheel", StringComparison.OrdinalIgnoreCase)) return false;
+
+        int weight = TryParseInt(row, 1, out int w) ? w : 1000;
+        prize = ParsePrizeDef(defaultId, col0, weight);
+        return true;
+    }
+
     private static bool TryParseWheelPrize(DataRow row, int defaultId, out WheelPrizeDef prize)
     {
         prize = new WheelPrizeDef();
@@ -561,15 +587,15 @@ public class CashVortexExcelLoader
             else if (s.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) prize.JackpotType = "Ultra";
             else prize.JackpotType = "Mini";
         }
-        else if (double.TryParse(s, out double strikeVal))
+        else if (double.TryParse(s, out double cashVal))
         {
-            prize.Type = WheelPrizeType.UltraStrike;
-            prize.ParameterValue = strikeVal;
+            prize.Type = WheelPrizeType.InstantCash;
+            prize.ParameterValue = cashVal;
         }
         else
         {
-            prize.Type = WheelPrizeType.Multiplier;
-            prize.ParameterValue = 2.0;
+            prize.Type = WheelPrizeType.InstantCash;
+            prize.ParameterValue = 1.0;
         }
 
         return prize;
@@ -659,6 +685,19 @@ public class CashVortexExcelLoader
             config.UltraWheelPrizes.Add(ParsePrizeDef(1, "5", 1000));
             config.UltraWheelPrizes.Add(ParsePrizeDef(2, "Ultra Jackpot", 100));
             config.UltraWheelPrizes.Add(ParsePrizeDef(3, "Lock & Slingo", 500));
+        }
+
+        if (config.CenterWheelPrizes.Count == 0)
+        {
+            config.CenterWheelPrizes.Add(ParsePrizeDef(0, "1", 1000));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(1, "2", 1000));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(2, "3", 1000));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(3, "4", 1000));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(4, "5", 1000));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(5, "Mini Jackpot", 1000));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(6, "Mega Jackpot", 200));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(7, "Ultra Jackpot", 100));
+            config.CenterWheelPrizes.Add(ParsePrizeDef(8, "Lock&Slingo", 1000));
         }
 
         // Lock & Slingo Bonus Defaults

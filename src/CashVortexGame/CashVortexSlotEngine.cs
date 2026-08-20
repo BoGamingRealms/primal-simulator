@@ -523,106 +523,47 @@ public class CashVortexSlotEngine : ISlotEngine
 
     private void RunCenterWildWheelBonus(IRng rng, SpinResult spinResult)
     {
-        int currentWheel = 1;
+        var weightTable = _config.CenterWheelWeightTable;
+        var prizeList = _config.CenterWheelPrizes;
 
-        while (currentWheel <= 3)
+        if (weightTable == null || prizeList == null || prizeList.Count == 0 || weightTable.TotalWeight == 0) return;
+
+        int idx = weightTable.Sample(rng);
+        var prize = prizeList[idx];
+        long prizeWinCents = 0;
+
+        switch (prize.Type)
         {
-            var weightTable = currentWheel switch
-            {
-                1 => _config.MiniWheelWeightTable,
-                2 => _config.MegaWheelWeightTable,
-                3 => _config.UltraWheelWeightTable,
-                _ => _config.UltraWheelWeightTable
-            };
+            case WheelPrizeType.InstantCash:
+                double cashMult = prize.ParameterValue > 0 ? prize.ParameterValue : 1.0;
+                prizeWinCents = (long)Math.Round(cashMult * 100);
+                spinResult.TotalWin += prizeWinCents;
+                break;
 
-            var prizeList = currentWheel switch
-            {
-                1 => _config.MiniWheelPrizes,
-                2 => _config.MegaWheelPrizes,
-                3 => _config.UltraWheelPrizes,
-                _ => _config.UltraWheelPrizes
-            };
-
-            if (weightTable == null || prizeList == null || prizeList.Count == 0) break;
-
-            int idx = weightTable.Sample(rng);
-            var prize = prizeList[idx];
-
-            if (prize.Type == WheelPrizeType.Upgrade)
-            {
-                spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
+            case WheelPrizeType.Jackpot:
+                double jpMult = 5.0;
+                if (!string.IsNullOrEmpty(prize.JackpotType))
                 {
-                    PotIndex = 1,
-                    BonusName = $"CenterWheel:W{currentWheel}:Upgrade",
-                    Win = 0
-                });
+                    var match = _config.JackpotCoins.FirstOrDefault(j => j.JackpotName.Equals(prize.JackpotType, StringComparison.OrdinalIgnoreCase));
+                    if (match != null) jpMult = match.Multiplier;
+                    else if (prize.JackpotType.Contains("Mega", StringComparison.OrdinalIgnoreCase)) jpMult = 50.0;
+                    else if (prize.JackpotType.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) jpMult = 500.0;
+                }
+                prizeWinCents = (long)Math.Round(jpMult * 100);
+                spinResult.TotalWin += prizeWinCents;
+                break;
 
-                currentWheel++;
-                if (currentWheel > 3) currentWheel = 3;
-                continue;
-            }
-
-            long prizeWinCents = 0;
-
-            switch (prize.Type)
-            {
-                case WheelPrizeType.Multiplier:
-                    double mult = prize.ParameterValue > 0 ? prize.ParameterValue : 2.0;
-                    for (int r = 0; r < 5; r++)
-                    {
-                        for (int c = 0; c < 5; c++)
-                        {
-                            var cell = _grid[r, c];
-                            if (cell.Type != SymbolType.Blank && cell.Type != SymbolType.CentralWildStar && cell.Type != SymbolType.JackpotCoin)
-                            {
-                                cell.CashValue *= mult;
-                            }
-                        }
-                    }
-                    break;
-
-                case WheelPrizeType.UltraStrike:
-                    double strike = prize.ParameterValue;
-                    for (int r = 0; r < 5; r++)
-                    {
-                        for (int c = 0; c < 5; c++)
-                        {
-                            var cell = _grid[r, c];
-                            if (cell.Type != SymbolType.Blank && cell.Type != SymbolType.CentralWildStar && cell.Type != SymbolType.JackpotCoin)
-                            {
-                                cell.CashValue += strike;
-                            }
-                        }
-                    }
-                    break;
-
-                case WheelPrizeType.Jackpot:
-                    double jpMult = 5.0;
-                    if (!string.IsNullOrEmpty(prize.JackpotType))
-                    {
-                        var match = _config.JackpotCoins.FirstOrDefault(j => j.JackpotName.Equals(prize.JackpotType, StringComparison.OrdinalIgnoreCase));
-                        if (match != null) jpMult = match.Multiplier;
-                        else if (prize.JackpotType.Contains("Mega", StringComparison.OrdinalIgnoreCase)) jpMult = 50.0;
-                        else if (prize.JackpotType.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) jpMult = 500.0;
-                    }
-                    prizeWinCents = (long)Math.Round(jpMult * 100);
-                    spinResult.TotalWin += prizeWinCents;
-                    break;
-
-                case WheelPrizeType.LockAndSlingo:
-                    PlayLockAndSlingoBonus(rng, spinResult);
-                    break;
-            }
-
-            spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
-            {
-                PotIndex = 1,
-                BonusName = $"CenterWheel:W{currentWheel}:{prize.PrizeString}",
-                Win = prizeWinCents
-            });
-
-            break;
+            case WheelPrizeType.LockAndSlingo:
+                PlayLockAndSlingoBonus(rng, spinResult);
+                break;
         }
+
+        spinResult.TriggeredPotBonuses.Add(new TriggeredPotBonus
+        {
+            PotIndex = 0,
+            BonusName = $"CenterWheel:{prize.PrizeString}",
+            Win = prizeWinCents
+        });
     }
 
     public void PlayLockAndSlingoBonus(IRng rng, SpinResult spinResult)

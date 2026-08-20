@@ -38,6 +38,7 @@ public class CashVortexEngineTests
         Assert.NotEmpty(config.MiniWheelPrizes);
         Assert.NotEmpty(config.MegaWheelPrizes);
         Assert.NotEmpty(config.UltraWheelPrizes);
+        Assert.NotEmpty(config.CenterWheelPrizes);
     }
 
     [Fact]

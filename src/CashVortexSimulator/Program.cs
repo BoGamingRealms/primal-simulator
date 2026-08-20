@@ -28,12 +28,18 @@ public class CashVortexSimWorkerStats
     public int UltraStrikeHits { get; set; }
     public int XWheelHits { get; set; }
 
+    // X-Wheel Feature stats (Top of reels)
     public long XWheelTotalWin { get; set; }
     public int[] WheelReachHits { get; set; } = new int[4];
     public long[] WheelRtpWin { get; set; } = new long[4];
-
     public Dictionary<string, int> WheelPrizeHits { get; set; } = new();
     public Dictionary<string, long> WheelPrizeWins { get; set; } = new();
+
+    // Center Wild Wheel Bonus stats
+    public int CenterWheelTriggers { get; set; }
+    public long CenterWheelTotalWin { get; set; }
+    public Dictionary<string, int> CenterWheelPrizeHits { get; set; } = new();
+    public Dictionary<string, long> CenterWheelPrizeWins { get; set; } = new();
 
     public Dictionary<string, int> JackpotHits { get; set; } = new();
     public Dictionary<string, long> JackpotWins { get; set; } = new();
@@ -72,7 +78,15 @@ public class CashVortexSimWorkerStats
 
         foreach (var pot in result.TriggeredPotBonuses)
         {
-            if (pot.BonusName.StartsWith("XWheel:") || pot.BonusName.StartsWith("CenterWheel:"))
+            if (pot.BonusName.StartsWith("CenterWheel:"))
+            {
+                CenterWheelTriggers++;
+                CenterWheelTotalWin += pot.Win;
+                string prizeName = pot.BonusName.Substring("CenterWheel:".Length);
+                CenterWheelPrizeHits[prizeName] = CenterWheelPrizeHits.GetValueOrDefault(prizeName) + 1;
+                CenterWheelPrizeWins[prizeName] = CenterWheelPrizeWins.GetValueOrDefault(prizeName) + pot.Win;
+            }
+            else if (pot.BonusName.StartsWith("XWheel:"))
             {
                 XWheelTotalWin += pot.Win;
                 var parts = pot.BonusName.Split(':');
@@ -203,9 +217,10 @@ class Program
             Console.WriteLine($"Jackpot Types: {config.JackpotCoins.Count}");
             Console.WriteLine($"Cash Strike Values Count: {config.CashStrikeValues.Count}");
             Console.WriteLine($"Cash Coin Values Count: {config.CashCoinValues.Count}");
-            Console.WriteLine($"Mini Wheel Prizes: {config.MiniWheelPrizes.Count}");
-            Console.WriteLine($"Mega Wheel Prizes: {config.MegaWheelPrizes.Count}");
-            Console.WriteLine($"Ultra Wheel Prizes: {config.UltraWheelPrizes.Count}");
+            Console.WriteLine($"Center Wheel Prizes: {config.CenterWheelPrizes.Count}");
+            Console.WriteLine($"X-Wheel Mini Wheel Prizes: {config.MiniWheelPrizes.Count}");
+            Console.WriteLine($"X-Wheel Mega Wheel Prizes: {config.MegaWheelPrizes.Count}");
+            Console.WriteLine($"X-Wheel Ultra Wheel Prizes: {config.UltraWheelPrizes.Count}");
             Console.WriteLine($"Slingo Ladder Prizes: {config.SlingoLadderPrizes.Count}");
             Console.WriteLine($"Bonus Landing Base Factor: {config.BonusBaseFactor}");
             Console.WriteLine($"Bonus Outcome Types: {config.BonusOutcomeDefs.Count}");
@@ -256,6 +271,11 @@ class Program
             int xWheelHits = 0;
             long xWheelTotalWin = 0;
 
+            int centerWheelTriggers = 0;
+            long centerWheelTotalWin = 0;
+            var centerWheelPrizeHits = new Dictionary<string, int>();
+            var centerWheelPrizeWins = new Dictionary<string, long>();
+
             int[] wheelReachHits = new int[4];
             long[] wheelRtpWin = new long[4];
             var wheelPrizeHits = new Dictionary<string, int>();
@@ -292,6 +312,17 @@ class Program
                 ultraStrikeHits += w.UltraStrikeHits;
                 xWheelHits += w.XWheelHits;
                 xWheelTotalWin += w.XWheelTotalWin;
+
+                centerWheelTriggers += w.CenterWheelTriggers;
+                centerWheelTotalWin += w.CenterWheelTotalWin;
+                foreach (var kvp in w.CenterWheelPrizeHits)
+                {
+                    centerWheelPrizeHits[kvp.Key] = centerWheelPrizeHits.GetValueOrDefault(kvp.Key) + kvp.Value;
+                }
+                foreach (var kvp in w.CenterWheelPrizeWins)
+                {
+                    centerWheelPrizeWins[kvp.Key] = centerWheelPrizeWins.GetValueOrDefault(kvp.Key) + kvp.Value;
+                }
 
                 lockAndSlingoTriggers += w.LockAndSlingoTriggers;
                 lockAndSlingoTotalWin += w.LockAndSlingoTotalWin;
@@ -330,6 +361,7 @@ class Program
 
             double totalRtp = (double)totalWin / (totalSpins * 100.0);
             double lineWinRtp = (double)totalLineWin / (totalSpins * 100.0);
+            double centerWheelRtp = (double)centerWheelTotalWin / (totalSpins * 100.0);
             double xWheelRtp = (double)xWheelTotalWin / (totalSpins * 100.0);
             double lockAndSlingoRtp = (double)lockAndSlingoTotalWin / (totalSpins * 100.0);
             double hitFreq = (double)winSpins / totalSpins;
@@ -337,10 +369,27 @@ class Program
             Console.WriteLine($"\nSimulation complete!");
             Console.WriteLine($"  - Total RTP: {totalRtp:P2}");
             Console.WriteLine($"    - Line Payout RTP: {lineWinRtp:P2}");
-            Console.WriteLine($"    - Wheel Features Direct RTP: {xWheelRtp:P2}");
+            Console.WriteLine($"    - Center Wild Wheel Bonus RTP: {centerWheelRtp:P2}");
+            Console.WriteLine($"    - X-Wheel Direct RTP: {xWheelRtp:P2}");
             Console.WriteLine($"    - Lock & Slingo™ Bonus RTP: {lockAndSlingoRtp:P2}");
             Console.WriteLine($"  - Hit Frequency: {hitFreq:P2}");
             Console.WriteLine($"  - Total Slingo Lines Completed: {totalSlingoLines:N0} (1 in {((double)totalSpins / Math.Max(1, totalSlingoLines)):F2} spins)");
+
+            Console.WriteLine("\n[Center Wild Wheel Bonus Breakdown]");
+            Console.WriteLine($"  - Total Triggers: {centerWheelTriggers:N0} (1 in {((double)totalSpins / Math.Max(1, centerWheelTriggers)):F2} spins | {((double)centerWheelTriggers / totalSpins):P2})");
+            Console.WriteLine($"  - Direct Bonus RTP: {centerWheelRtp:P2}");
+            if (trackFullStats)
+            {
+                foreach (var prize in config.CenterWheelPrizes)
+                {
+                    int hits = centerWheelPrizeHits.GetValueOrDefault(prize.PrizeString);
+                    long win = centerWheelPrizeWins.GetValueOrDefault(prize.PrizeString);
+                    double wheelChance = centerWheelTriggers > 0 ? (double)hits / centerWheelTriggers : 0;
+                    double spinChance = (double)hits / totalSpins;
+                    double prizeRtp = (double)win / (totalSpins * 100.0);
+                    Console.WriteLine($"    * {prize.PrizeString,-15}: Hits = {hits,6:N0} | Wheel Chance = {wheelChance,7:P2} | Total Chance = {spinChance,7:P4} | RTP = {prizeRtp,7:P4}");
+                }
+            }
 
             Console.WriteLine("\n[Lock & Slingo™ Bonus Breakdown]");
             double lnsTrigChance = (double)lockAndSlingoTriggers / totalSpins;
@@ -365,7 +414,7 @@ class Program
             Console.WriteLine($"  - Ultra Strikes: {ultraStrikeHits:N0}");
             Console.WriteLine($"  - X Wheel Triggers: {xWheelHits:N0} (Hit Chance: {((double)xWheelHits / totalSpins):P2})");
 
-            Console.WriteLine("\n[Wheel Feature Breakdown]");
+            Console.WriteLine("\n[X-Wheel Feature Breakdown]");
             for (int wL = 1; wL <= 3; wL++)
             {
                 string wName = wL == 1 ? "Mini Wheel (Wheel 1)" : (wL == 2 ? "Mega Wheel (Wheel 2)" : "Ultra Wheel (Wheel 3)");
@@ -378,7 +427,7 @@ class Program
 
             if (trackFullStats)
             {
-                Console.WriteLine("\n[Wheel Detailed Prize Stats]");
+                Console.WriteLine("\n[X-Wheel Detailed Prize Stats]");
                 for (int wL = 1; wL <= 3; wL++)
                 {
                     string wTag = $"W{wL}";
@@ -403,7 +452,7 @@ class Program
                 Console.WriteLine("\n[Lock & Slingo Ladder Achievements]");
                 for (int s = 0; s <= 12; s++)
                 {
-                    if (s == 11) continue; // Ladder skips 11
+                    if (s == 11) continue;
                     int sHits = lockAndSlingoLadderHits[s];
                     double sChance = lockAndSlingoTriggers > 0 ? (double)sHits / lockAndSlingoTriggers : 0;
                     Console.WriteLine($"  - Slingo {s,2} Line(s): Hits = {sHits,6:N0} | {sChance,7:P2} of bonus rounds");
@@ -433,10 +482,12 @@ class Program
             ws.Cell(rowIdx, 1).Value = "Total Spins"; ws.Cell(rowIdx, 2).Value = totalSpins; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Total RTP"; ws.Cell(rowIdx, 2).Value = $"{totalRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Line Win RTP"; ws.Cell(rowIdx, 2).Value = $"{lineWinRtp:P2}"; rowIdx++;
-            ws.Cell(rowIdx, 1).Value = "Wheel Features Direct RTP"; ws.Cell(rowIdx, 2).Value = $"{xWheelRtp:P2}"; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Center Wild Wheel Bonus RTP"; ws.Cell(rowIdx, 2).Value = $"{centerWheelRtp:P2}"; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "X-Wheel Direct RTP"; ws.Cell(rowIdx, 2).Value = $"{xWheelRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Lock & Slingo™ Bonus RTP"; ws.Cell(rowIdx, 2).Value = $"{lockAndSlingoRtp:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Hit Frequency"; ws.Cell(rowIdx, 2).Value = $"{hitFreq:P2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Slingo Lines Completed"; ws.Cell(rowIdx, 2).Value = totalSlingoLines; rowIdx++;
+            ws.Cell(rowIdx, 1).Value = "Center Wheel Triggers"; ws.Cell(rowIdx, 2).Value = centerWheelTriggers; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Lock & Slingo Triggers"; ws.Cell(rowIdx, 2).Value = lockAndSlingoTriggers; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Average Bonus Win (x bet)"; ws.Cell(rowIdx, 2).Value = $"{avgLnsWin:F2}"; rowIdx++;
             ws.Cell(rowIdx, 1).Value = "Full House Hits"; ws.Cell(rowIdx, 2).Value = lockAndSlingoFullHouses; rowIdx++;
@@ -457,8 +508,37 @@ class Program
 
             ws.Columns().AdjustToContents();
 
+            // Add Center Wheel Worksheet
+            var wsCenter = workbook.Worksheets.Add("Center Wheel Details");
+            wsCenter.Cell(1, 1).Value = "Prize";
+            wsCenter.Cell(1, 2).Value = "Hits";
+            wsCenter.Cell(1, 3).Value = "Wheel Hit Chance %";
+            wsCenter.Cell(1, 4).Value = "Total Spins Hit Chance %";
+            wsCenter.Cell(1, 5).Value = "Direct Win";
+            wsCenter.Cell(1, 6).Value = "Direct RTP %";
+            wsCenter.Row(1).Style.Font.Bold = true;
+
+            int cRow = 2;
+            foreach (var prize in config.CenterWheelPrizes)
+            {
+                int hits = centerWheelPrizeHits.GetValueOrDefault(prize.PrizeString);
+                long win = centerWheelPrizeWins.GetValueOrDefault(prize.PrizeString);
+                double wheelChance = centerWheelTriggers > 0 ? (double)hits / centerWheelTriggers : 0;
+                double spinChance = (double)hits / totalSpins;
+                double prizeRtp = (double)win / (totalSpins * 100.0);
+
+                wsCenter.Cell(cRow, 1).Value = prize.PrizeString;
+                wsCenter.Cell(cRow, 2).Value = hits;
+                wsCenter.Cell(cRow, 3).Value = $"{wheelChance:P2}";
+                wsCenter.Cell(cRow, 4).Value = $"{spinChance:P4}";
+                wsCenter.Cell(cRow, 5).Value = win;
+                wsCenter.Cell(cRow, 6).Value = $"{prizeRtp:P4}";
+                cRow++;
+            }
+            wsCenter.Columns().AdjustToContents();
+
             // Add X Wheel Details Worksheet
-            var wsWheel = workbook.Worksheets.Add("Wheel Details");
+            var wsWheel = workbook.Worksheets.Add("X Wheel Details");
             wsWheel.Cell(1, 1).Value = "Wheel";
             wsWheel.Cell(1, 2).Value = "Prize";
             wsWheel.Cell(1, 3).Value = "Hits";
