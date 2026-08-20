@@ -393,7 +393,11 @@ public class CashVortexSlotEngine : ISlotEngine
         return type == SymbolType.CashCoin ||
                type == SymbolType.MiniVortex ||
                type == SymbolType.MegaVortex ||
-               type == SymbolType.UltraVortex;
+               type == SymbolType.UltraVortex ||
+               type == SymbolType.XWheel ||
+               type == SymbolType.MiniStrike ||
+               type == SymbolType.MegaStrike ||
+               type == SymbolType.UltraStrike;
     }
 
     private List<GridCell> GetOrthogonalNeighbors(int row, int col)
@@ -566,7 +570,7 @@ public class CashVortexSlotEngine : ISlotEngine
                         for (int c = 0; c < 5; c++)
                         {
                             var cell = _grid[r, c];
-                            if (cell.Type != SymbolType.Blank && cell.Type != SymbolType.CentralWildStar)
+                            if (cell.Type != SymbolType.Blank && cell.Type != SymbolType.CentralWildStar && cell.Type != SymbolType.JackpotCoin)
                             {
                                 cell.CashValue *= mult;
                             }
@@ -581,7 +585,7 @@ public class CashVortexSlotEngine : ISlotEngine
                         for (int c = 0; c < 5; c++)
                         {
                             var cell = _grid[r, c];
-                            if (cell.Type != SymbolType.Blank && cell.Type != SymbolType.CentralWildStar)
+                            if (cell.Type != SymbolType.Blank && cell.Type != SymbolType.CentralWildStar && cell.Type != SymbolType.JackpotCoin)
                             {
                                 cell.CashValue += strike;
                             }

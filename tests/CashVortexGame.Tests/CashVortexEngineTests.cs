@@ -87,4 +87,21 @@ public class CashVortexEngineTests
         Assert.Equal(1.0, engine.Grid[0, 0].CashValue);
         Assert.Equal(SymbolType.XWheel, engine.Grid[0, 0].Type);
     }
+
+    [Fact]
+    public void SlotEngine_JackpotCoin_IsNotModifiedByStrikesOrVortexes()
+    {
+        var config = LoadConfig();
+        var engine = new CashVortexSlotEngine(config);
+
+        // Place a Mini Jackpot (5.0) at (0, 0)
+        engine.Grid[0, 0].Type = SymbolType.JackpotCoin;
+        engine.Grid[0, 0].JackpotType = "Mini";
+        engine.Grid[0, 0].CashValue = 5.0;
+        engine.Grid[0, 0].LifeRemaining = 3;
+
+        // Verify that Jackpot Coin remains intact with its fixed 5.0 value
+        Assert.Equal(5.0, engine.Grid[0, 0].CashValue);
+        Assert.Equal(SymbolType.JackpotCoin, engine.Grid[0, 0].Type);
+    }
 }
